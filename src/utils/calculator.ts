@@ -1,8 +1,3 @@
-/**
- * Milthm 分数和 Rating 计算模块
- * 参考 milthm-calculator-web
- */
-
 export interface SongInfo {
   /** 歌曲定数 */
   constant: number

@@ -1,7 +1,6 @@
 import { type Context, Logger, h } from 'koishi'
 import type Config from './config'
 import { createLogger, setLoggerLevel } from './utils/logger'
-import { formatError } from './utils/formatter'
 import {
   initClients,
   generateAuthUrlForUser,
@@ -9,7 +8,6 @@ import {
   cancelAuthSession,
   setMainLogger,
   processSaveData,
-  formatB20Text,
   generateB20Image
 } from './core'
 
@@ -33,8 +31,7 @@ export function apply(ctx: Context, config: Config) {
   ctx
     .command('milthm', 'Milthm 查分器')
     .alias('mlt')
-    .option('text', '-t 仅显示文本结果')
-    .action(async ({ session, options }) => {
+    .action(async ({ session }) => {
       const userId = session.userId
 
       try {
@@ -56,11 +53,6 @@ export function apply(ctx: Context, config: Config) {
 
         if (b20Result.best20.length === 0) {
           return '未找到有效的成绩数据'
-        }
-
-        // 如果指定了 -t 参数，只返回文本
-        if (options?.text) {
-          return formatB20Text(b20Result)
         }
 
         // 生成图片
@@ -103,6 +95,19 @@ function setupLogger(config: Config) {
   if (config.isLog) {
     setLoggerLevel(Logger.DEBUG)
   }
+}
+
+function formatError(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.message.includes('授权超时')) {
+      return '授权超时，请重新尝试'
+    }
+    if (error.message.includes('找不到用户的授权会话')) {
+      return '当前没有进行中的授权请求，请先发送查分命令'
+    }
+    return `查分失败: ${error.message}`
+  }
+  return `查分失败: ${String(error)}`
 }
 
 export * from './config'

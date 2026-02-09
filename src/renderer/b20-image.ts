@@ -1,7 +1,17 @@
 /**
  * B20 图片生成器
  * 使用 takumi-rs + wasm-vips 生成查分图片
- * 精确对齐 milthm-calculator-web 的 archiveDownloadImage / drawCards
+ * 精确对齐 milthm-calculator-web 的 downloadImage (MilAerno 新 UI)
+ *
+ * 参考 CSS 关键尺寸:
+ *   .cardcover: 450×136px, border-radius 23px, padding 10px
+ *   .cardimgcover: 204.444×115px, border-radius 15px, margin-right 8px
+ *   .cardtext: width 205px, padding 5px
+ *   .grade: max-width 50px
+ *   .gradetext: font-size 2em, flex align-items center
+ *   .down: grid gap 30px, padding 40px 40px 10px 10px
+ *   category bar: 6×18px rounded
+ *   .split-title: 3px solid #d1d8ff
  */
 
 import { Renderer } from '@takumi-rs/wasm/node'
@@ -24,7 +34,6 @@ let assetsPath = ''
 let renderer: Renderer | null = null
 let vipsInstance: any = null
 
-// 图片缓存（PNG 数据）
 const pngCache = new Map<string, Uint8Array>()
 
 export function setB20AssetsPath(dirname: string) {
@@ -44,27 +53,23 @@ async function initVips() {
 async function initRenderer() {
   if (renderer) return renderer
   renderer = new Renderer()
-
-  // 加载字体（优先 Arial 风格，回退到可用字体）
   const fontDirs = [
     ['Chill Round', 'ChillRoundF v3.0.ttf'],
     ['alimamafangyuanti', 'AlimamaFangYuanTiVF-Thin.ttf']
   ]
-
   for (const [dir, file] of fontDirs) {
     try {
       const fontPath = path.join(assetsPath, 'assets', 'fonts', dir, file)
       const fontBuffer = await fs.readFile(fontPath)
       renderer.loadFont(new Uint8Array(fontBuffer))
-    } catch (_e) {
-      // font not available, skip
+    } catch {
+      /* font not available */
     }
   }
-
   return renderer
 }
 
-/* ===== AVIF → PNG 转换 ===== */
+/* ===== AVIF → PNG ===== */
 
 async function convertAvifToPng(avifBuffer: Buffer): Promise<Uint8Array> {
   const vips = await initVips()
@@ -77,29 +82,23 @@ async function convertAvifToPng(avifBuffer: Buffer): Promise<Uint8Array> {
     if (img) {
       try {
         img[Symbol.dispose]()
-      } catch (_e) {
-        /* ignore */
+      } catch {
+        /* */
       }
     }
   }
 }
 
-/* ===== 图片加载 ===== */
-
 async function loadAvifImage(relativePath: string): Promise<Uint8Array | null> {
-  const cacheKey = relativePath
-  const cached = pngCache.get(cacheKey)
+  const cached = pngCache.get(relativePath)
   if (cached) return cached
-
   const fullPath = path.join(assetsPath, 'assets', relativePath)
   try {
     const avifBuffer = await fs.readFile(fullPath)
     const pngData = await convertAvifToPng(avifBuffer)
-    if (pngCache.size < 200) {
-      pngCache.set(cacheKey, pngData)
-    }
+    if (pngCache.size < 200) pngCache.set(relativePath, pngData)
     return pngData
-  } catch (_e) {
+  } catch {
     return null
   }
 }
@@ -108,26 +107,12 @@ function registerImage(r: Renderer, key: string, data: Uint8Array) {
   r.putPersistentImage({ src: key, data })
 }
 
-/**
- * 封面文件名（与 web 版 imgName 完全一致）
- */
+/* ===== 辅助函数 ===== */
+
 function getCoverFileName(songName: string): string {
-  return songName
-    .replace(/#/g, '')
-    .replace(/\?/g, '')
-    .replace(/>/g, '')
-    .replace(/</g, '')
-    .replace(/\*/g, '')
-    .replace(/"/g, '')
-    .replace(/\|/g, '')
-    .replace(/\//g, '')
-    .replace(/\\/g, '')
-    .replace(/:/g, '')
+  return songName.replace(/[#?><*"|/\\:]/g, '')
 }
 
-/**
- * 等级图标名（与 web 版 getLevelIconName 完全一致）
- */
 function getLevelIconName(item: ProcessedScore): string {
   if (item.bestLevel === 0) return '0'
   if (item.bestLevel === 6 || item.bestLevel === 7) return '6'
@@ -138,9 +123,6 @@ function getLevelIconName(item: ProcessedScore): string {
   return `${item.bestLevel}`
 }
 
-/**
- * V3 高亮判定（与 web 版完全一致）
- */
 function isV3Highlight(item: ProcessedScore): boolean {
   return (
     item.isV3 ||
@@ -152,20 +134,110 @@ function isV3Highlight(item: ProcessedScore): boolean {
 }
 
 /**
- * 星标计算（与 web 版一致：AP 最高定数）
+ * 类别色条颜色 (CSS 渐变取近似中间色)
+ * .CB: linear-gradient(45deg, #6479f1, #9567e9) → #7A73ED
+ * .CL: linear-gradient(45deg, #727272, #d3d3d3) → #A3A3A3
+ * .DZ: linear-gradient(45deg, #93dbdb, #b2b5c5) → #A3C8D0
+ * .SK: linear-gradient(45deg, #6584e2, #9cb8ec) → #809EE7
+ * .SP: #FFFFFF
+ * .UN: linear-gradient(45deg, #1a1da7, #4d77ec) → #344DCA
  */
-function calculateStars(items: ProcessedScore[]): string {
+function getCategoryColor(cat: string): string {
+  switch (cat) {
+    case 'CB':
+      return '#7A73ED'
+    case 'CL':
+      return '#A3A3A3'
+    case 'DZ':
+      return '#A3C8D0'
+    case 'SK':
+      return '#809EE7'
+    case 'SP':
+      return '#FFFFFF'
+    default:
+      return '#344DCA'
+  }
+}
+
+/**
+ * 分数颜色 (新 UI CSS 类名对应)
+ * .R (bestLevel=0): 渐变 #9A6EFA→#92C5FA → 兼容色 #969BFA
+ * .AP (iconName ends '0'): 渐变 #A174FA→#E4D7FE → 兼容色 #BFA0FC
+ * .FC (iconName ends '1'): 白色
+ * 普通: 白色
+ */
+function getScoreColor(item: ProcessedScore): string {
+  const iconName = getLevelIconName(item)
+  if (iconName === '0' || iconName === '0-1') return '#969BFA'
+  if (iconName.length > 1 && iconName[1] === '0') return '#BFA0FC'
+  return '#FFFFFF'
+}
+
+/**
+ * 星标计算 (web downloadImage 逻辑)
+ */
+function calculateStars(items: ProcessedScore[]): number {
   let maxConstant = -Infinity
   for (const item of items) {
     if (Array.isArray(item.achievedStatus) && item.achievedStatus.includes(5)) {
       if (item.constantv3 > maxConstant) maxConstant = item.constantv3
     }
   }
-  if (maxConstant > 12) return '☆☆☆'
-  if (maxConstant > 9) return '☆☆'
-  if (maxConstant > 6) return '☆'
-  return ''
+  if (maxConstant >= 12) return 3
+  if (maxConstant >= 9) return 2
+  if (maxConstant >= 6) return 1
+  return 0
 }
+
+function limitText(str: string, len: number): string {
+  let l = 0
+  const chars = [...str]
+  for (let i = 0; i < chars.length; i++) {
+    const code = chars[i].charCodeAt(0)
+    if (code > 255) l += 2
+    else if (/[A-Z]/.test(chars[i]) && chars[i] !== 'I') l += 1.5
+    else l += 1
+    if (l >= len) return `${str.slice(0, Math.max(i - 2, 0))}...`
+  }
+  return str
+}
+
+/* ===== 布局常量 (MilAerno 新 UI) ===== */
+
+const CANVAS_W = 1000
+
+// 头部
+const HEADER_PAD = 40
+
+// 卡片网格 (.down padding: 40px 40px 10px 40px, gap: 30px)
+const GRID_PAD_X = 40
+const GRID_PAD_TOP = 10
+const GRID_GAP = 30
+
+// 卡片 (.cardcover: 450×136, border-radius 23, padding 10)
+const CARD_W = 450
+const CARD_H = 136
+const CARD_RADIUS = 23
+const CARD_PAD = 10
+
+// 封面 (.cardimgcover: 204.444×115, border-radius 15, margin-right 8)
+const COVER_W = 204
+const COVER_H = 115
+const COVER_RADIUS = 15
+const COVER_MR = 8
+
+// 文字区 (.cardtext: width 205, padding 5)
+const TEXT_PAD = 5
+
+// 段位图标 (.grade max-width 50, margin -10, margin-top -8)
+const GRADE_ICON_W = 40
+
+// 类别色条
+const CAT_BAR_W = 6
+const CAT_BAR_H = 18
+
+// OVERFLOW 分割线区域高度
+const SPLIT_H = 50
 
 /* ===== 主生成函数 ===== */
 
@@ -179,25 +251,30 @@ export async function generateB20Image(
 
   const items = result.best20
   const cardCount = items.length
+  const b20Count = Math.min(cardCount, 20)
+  const overflowCount = Math.max(0, cardCount - 20)
 
-  // ===== 画布尺寸（web 版 archiveDownloadImage 逻辑） =====
-  const width = 1200
-  const baseHeight = 2200
-  const newHeight = 400 + Math.ceil(cardCount / 2) * 165
-  const canvasHeight = Math.max(baseHeight, newHeight)
+  // 网格: 2 列
+  const cols = 2
+  const b20Rows = Math.ceil(b20Count / cols)
+  const overflowRows = Math.ceil(overflowCount / cols)
 
-  // ===== drawCards 常量 =====
-  const cardW = 442,
-    cardH = 130,
-    imgW = 185,
-    imgH = 104,
-    iconSize = 91
-  const x0 = 110,
-    y0 = 350,
-    col = 520,
-    row = 162.5
+  // 头部区域高度
+  const headerH = 260
 
-  // ===== 1. 加载随机背景 =====
+  // B20 卡片区域高度
+  const b20GridH = GRID_PAD_TOP + b20Rows * (CARD_H + GRID_GAP)
+
+  // OVERFLOW 区域
+  const overflowH =
+    overflowCount > 0 ? SPLIT_H + overflowRows * (CARD_H + GRID_GAP) : 0
+
+  // 底部
+  const footerH = 90
+
+  const canvasH = headerH + b20GridH + overflowH + footerH
+
+  // ===== 1. 加载背景 =====
   const bgNames = [
     '1',
     '2',
@@ -219,14 +296,13 @@ export async function generateB20Image(
   const bgPng = await loadAvifImage(`backgrounds/${bgFile}.avif`)
   if (bgPng) registerImage(r, 'bg', bgPng)
 
-  // ===== 2. 预加载所有封面图和段位图标 =====
+  // ===== 2. 预加载封面和段位图标 =====
   const coverKeys: (string | null)[] = []
   const iconKeys: (string | null)[] = []
   const registeredIcons = new Set<string>()
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
-
     // 封面
     const coverFileName = getCoverFileName(item.name)
     const coverKey = `cover_${i}`
@@ -237,7 +313,6 @@ export async function generateB20Image(
     } else {
       coverKeys.push(null)
     }
-
     // 段位图标
     const iconName = getLevelIconName(item)
     const iconKey = `icon_${iconName}`
@@ -254,7 +329,7 @@ export async function generateB20Image(
   // ===== 3. 构建布局 =====
   const children: any[] = []
 
-  // --- 背景图（铺满） ---
+  // --- 背景 ---
   if (bgPng) {
     children.push(
       image({
@@ -263,416 +338,563 @@ export async function generateB20Image(
           position: 'absolute',
           top: 0,
           left: 0,
-          width,
-          height: canvasHeight
-        }
-      })
-    )
-  } else {
-    // web 版 fallback: 纯黑背景
-    children.push(
-      container({
-        style: {
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width,
-          height: canvasHeight,
-          backgroundColor: '#000000'
+          width: CANVAS_W,
+          height: canvasH
         }
       })
     )
   }
 
-  // --- 头部半透明底 (0, 50, 1200, 200) ---
+  // --- 暗色蒙层 (main background-color: #0009 → 60% opacity) ---
   children.push(
     container({
       style: {
         position: 'absolute',
-        top: 50,
+        top: 0,
         left: 0,
-        width,
-        height: 200,
-        backgroundColor: 'rgba(128,128,128,0.3)'
+        width: CANVAS_W,
+        height: canvasH,
+        backgroundColor: 'rgba(0,0,0,0.6)'
       }
     })
   )
 
-  // --- 斜线（用细长矩形模拟，从 (550,250) 到 (650,50) 对角线） ---
-  // 斜线长度 = sqrt(100^2 + 200^2) ≈ 224px，角度 = atan(200/100) ≈ 63.4°
-  // takumi-rs 不支持 transform:rotate，用一组小矩形逼近
-  const lineSteps = 40
-  for (let s = 0; s <= lineSteps; s++) {
-    const t = s / lineSteps
-    const lx = 550 + t * 100
-    const ly = 250 - t * 200
-    children.push(
-      container({
-        style: {
-          position: 'absolute',
-          left: lx - 1,
-          top: ly - 1,
-          width: 4,
-          height: 4,
-          backgroundColor: 'rgba(255,255,255,0.8)'
-        }
-      })
-    )
-  }
-
-  // ===== 头部文字 =====
-  // Web 版使用 canvas textBaseline='alphabetic'（默认）
-  // 换算: takumi top = canvas_y - fontSize * 0.76
-
-  // 左侧标题: 50px at (100, 95)
+  // --- 头部渐变遮罩 (.cover: linear-gradient to top #000B) ---
   children.push(
     container({
-      style: { position: 'absolute', top: 57, left: 100 },
-      children: [
-        textNode('Milthm-calculator', { fontSize: 50, color: '#ffffff' })
-      ]
+      style: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: CANVAS_W,
+        height: headerH,
+        backgroundColor: 'rgba(0,0,0,0.35)'
+      }
     })
   )
 
-  // 左侧链接: 25px at (100, 125/153/181/207)
-  const links = [
-    { text: 'https://mhtlim.top/', y: 125 },
-    { text: 'http://k9.lv/c/', y: 153 },
-    { text: 'https://milcalc.netlify.app/', y: 181 },
-    { text: 'https://mkzi-nya.github.io/c/', y: 207 }
-  ]
-  for (const link of links) {
-    children.push(
-      container({
-        style: { position: 'absolute', top: link.y - 19, left: 100 },
-        children: [textNode(link.text, { fontSize: 25, color: '#ffffff' })]
-      })
-    )
-  }
-
-  // 左侧 "←查分上这里" 30px at (400, 130)
-  children.push(
-    container({
-      style: { position: 'absolute', top: 107, left: 400 },
-      children: [textNode('←查分上这里', { fontSize: 30, color: '#ffffff' })]
-    })
-  )
-  // "这几个网址都行" 20px at (440, 155)
-  children.push(
-    container({
-      style: { position: 'absolute', top: 140, left: 440 },
-      children: [textNode('这几个网址都行', { fontSize: 20, color: '#ffffff' })]
-    })
-  )
-
-  // 右侧: 25px 字体, alphabetic 基线
-  const star = calculateStars(items)
-  const username = userInfo?.username || ''
-  const nickname = userInfo?.nickname || ''
-  const uid = userInfo?.userId || ''
-
-  // 星标 at (660, 75) → top = 75 - 19 = 56
-  if (star) {
-    children.push(
-      container({
-        style: { position: 'absolute', top: 56, left: 660 },
-        children: [textNode(star, { fontSize: 25, color: '#ffffff' })]
-      })
-    )
-  }
-
-  // Player at (660, 100) → top = 81
-  const playerText = username
-    ? `Player: ${username}${nickname ? `  (${nickname})` : ''}`
-    : 'Player: -'
-  children.push(
-    container({
-      style: { position: 'absolute', top: 81, left: 660 },
-      children: [textNode(playerText, { fontSize: 25, color: '#ffffff' })]
-    })
-  )
-
-  // userID at (660, 128) → top = 109
-  children.push(
-    container({
-      style: { position: 'absolute', top: 109, left: 660 },
-      children: [
-        textNode(`userID: ${uid || '-'}`, { fontSize: 25, color: '#ffffff' })
-      ]
-    })
-  )
-
-  // Reality at (660, 160) → top = 141
-  children.push(
-    container({
-      style: { position: 'absolute', top: 141, left: 660 },
-      children: [
-        textNode(`Reality: ${result.averageRating.toFixed(2)}`, {
-          fontSize: 25,
-          color: '#ffffff'
-        })
-      ]
-    })
-  )
-
-  // Date at (660, 190) → top = 171
-  const now = new Date()
-  const dateStr = `${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0]}`
-  children.push(
-    container({
-      style: { position: 'absolute', top: 171, left: 660 },
-      children: [
-        textNode(`Date: ${dateStr}`, { fontSize: 25, color: '#ffffff' })
-      ]
-    })
-  )
-
-  // Updated (milthm-profiler 水印) 20px at (100, 230) → top ≈ 215
-  children.push(
-    container({
-      style: { position: 'absolute', top: 215, left: 100 },
-      children: [
-        textNode('Generated by milthm-profiler (Koishi)', {
-          fontSize: 20,
-          color: '#ffffff'
-        })
-      ]
-    })
-  )
+  // ===== 头部内容 =====
+  buildHeader(children, result, userInfo, items)
 
   // ===== B20 卡片 =====
-  // Web 版 drawCards 中设置了 textBaseline='top'，所以 canvas y 坐标 = top
-  // 可以直接使用 web 版坐标
+  const gridStartY = headerH
 
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i]
-
-    const x = x0 + (i % 2) * col
-    const y = y0 + Math.floor(i / 2) * row - (i % 2 ? 0 : 50)
-
-    const highlight = isV3Highlight(item)
-
-    // 卡底
-    children.push(
-      container({
-        style: {
-          position: 'absolute',
-          left: x,
-          top: y,
-          width: cardW,
-          height: cardH,
-          backgroundColor: highlight
-            ? 'rgba(128,128,128,0.5)'
-            : 'rgba(128,128,128,0.2)'
-        }
-      })
-    )
-
-    // 封面图 at (x+13, y+13, 185×104)
-    if (coverKeys[i]) {
-      children.push(
-        image({
-          src: coverKeys[i]!,
-          style: {
-            position: 'absolute',
-            left: x + 13,
-            top: y + 13,
-            width: imgW,
-            height: imgH
-          }
-        })
-      )
-    }
-
-    // 段位图标 at (x+351, y+26, 91×91)
-    if (iconKeys[i]) {
-      children.push(
-        image({
-          src: iconKeys[i]!,
-          style: {
-            position: 'absolute',
-            left: x + 351,
-            top: y + 26,
-            width: iconSize,
-            height: iconSize
-          }
-        })
-      )
-    }
-
-    // 排名号 (textAlign='right', textBaseline='top') at (x+cardW-10, y+7)
-    // takumi 不支持 textAlign right，用估算的左偏移:
-    // "#20" 约 3 字符 × 17px × 0.6 ≈ 30px 宽
-    const rankStr = `#${i + 1}`
-    const rankCharWidth = rankStr.length * 10 // 17px font, ~10px per char
-    children.push(
-      container({
-        style: {
-          position: 'absolute',
-          left: x + cardW - 10 - rankCharWidth,
-          top: y + 7
-        },
-        children: [
-          textNode(rankStr, {
-            fontSize: 17,
-            color: i < 20 ? '#FAFAFA' : '#C9C9C9'
-          })
-        ]
-      })
-    )
-
-    // 歌名 (textBaseline='top') at (x+212, y+23), 25px→10px 自适应
-    // Web 版缩到 ctx.measureText(name).width <= 200
-    // 我们估算：25px 字体下约 13px/ascii字符, 25px/中文字符
-    // 先尝试用 limitText 截断到大致宽度
-    const displayName = limitTextForWidth(item.name, 200, 25)
-    children.push(
-      container({
-        style: { position: 'absolute', left: x + 212, top: y + 23 },
-        children: [
-          textNode(displayName.text, {
-            fontSize: displayName.fontSize,
-            color: '#ffffff'
-          })
-        ]
-      })
-    )
-
-    // 分数 (textBaseline='top') at (x+208, y+52), 39px
-    // AP: 渐变 #99C5FB → #D8C3FA (takumi 不支持渐变, 用中间色近似)
-    // FC: #90CAEF, 普通: #FFFFFF
-    const scoreStr = String(item.score).padStart(7, '0')
-    const scoreColor = getScoreColor(item)
-    children.push(
-      container({
-        style: { position: 'absolute', left: x + 208, top: y + 52 },
-        children: [textNode(scoreStr, { fontSize: 39, color: scoreColor })]
-      })
-    )
-
-    // 目标分 13px at (x+212, y+86), textBaseline='top'
-    // Web 版调用 findScore()，我们简化为 ">>-"
-    children.push(
-      container({
-        style: { position: 'absolute', left: x + 212, top: y + 86 },
-        children: [textNode('>>-', { fontSize: 13, color: '#ffffff' })]
-      })
-    )
-
-    // 评级/常数/Rating/准确率行 20px at (x+208, y+98), textBaseline='top'
-    const acc = `${(item.accuracy * 100 || 0).toFixed(2)}%`
-    const constText = item.constantv3.toFixed(1)
-    const ratingLine = `${item.category} ${constText} > ${item.singleRating.toFixed(2)}   ${acc}`
-    children.push(
-      container({
-        style: { position: 'absolute', left: x + 208, top: y + 98 },
-        children: [textNode(ratingLine, { fontSize: 20, color: '#ffffff' })]
-      })
-    )
+  for (let i = 0; i < b20Count; i++) {
+    const colIdx = i % cols
+    const rowIdx = Math.floor(i / cols)
+    const cardX = GRID_PAD_X + colIdx * (CARD_W + GRID_GAP)
+    const cardY = gridStartY + GRID_PAD_TOP + rowIdx * (CARD_H + GRID_GAP)
+    buildCard(children, items[i], i, cardX, cardY, coverKeys[i], iconKeys[i])
   }
 
-  // ===== 底部水印 =====
-  const footerY = y0 + Math.ceil(cardCount / 2) * row + 80
-  children.push(
-    container({
-      style: { position: 'absolute', left: width / 2 - 200, top: footerY },
-      children: [
-        textNode('Milthm-Calculator by mkZH0740', {
-          fontSize: 16,
-          color: '#666666'
-        })
-      ]
-    })
-  )
+  // ===== OVERFLOW 分割线 + 卡片 =====
+  if (overflowCount > 0) {
+    const splitY = gridStartY + b20GridH
+    buildOverflowSplit(children, splitY)
+
+    const overflowGridY = splitY + SPLIT_H
+    for (let i = 20; i < cardCount; i++) {
+      const oi = i - 20
+      const colIdx = oi % cols
+      const rowIdx = Math.floor(oi / cols)
+      const cardX = GRID_PAD_X + colIdx * (CARD_W + GRID_GAP)
+      const cardY = overflowGridY + rowIdx * (CARD_H + GRID_GAP)
+      buildCard(children, items[i], i, cardX, cardY, coverKeys[i], iconKeys[i])
+    }
+  }
+
+  // ===== 底部 footer =====
+  buildFooter(children, canvasH, footerH)
 
   // 根容器
   const root = container({
     children,
     style: {
       position: 'relative',
-      width,
-      height: canvasHeight,
+      width: CANVAS_W,
+      height: canvasH,
       display: 'block',
-      backgroundColor: '#000000'
+      backgroundColor: '#191820'
     }
   })
 
-  // 渲染为 PNG
-  const buffer = r.render(root, { width, height: canvasHeight, format: 'png' })
+  const buffer = r.render(root, {
+    width: CANVAS_W,
+    height: canvasH,
+    format: 'png'
+  })
   return Buffer.from(buffer)
 }
 
-/* ===== 工具函数 ===== */
+/* ===== 头部构建 ===== */
 
-/**
- * Web 版歌名自适应缩小:
- * 从 25px 开始，如果文本宽度 > maxWidth 就缩小字号到 10px
- * 估算: ascii 字符约 fontSize * 0.55, 中文约 fontSize * 1.0
- */
-function limitTextForWidth(
-  str: string,
-  maxWidth: number,
-  startSize: number
-): { text: string; fontSize: number } {
-  let fontSize = startSize
-  while (fontSize > 10) {
-    const w = estimateTextWidth(str, fontSize)
-    if (w <= maxWidth) return { text: str, fontSize }
-    fontSize--
+function buildHeader(
+  children: any[],
+  result: B20Result,
+  userInfo: B20UserInfo | undefined,
+  items: ProcessedScore[]
+) {
+  const username = userInfo?.username || userInfo?.nickname || 'UNKNOWN'
+  const starCount = calculateStars(items)
+
+  // 左上: 标题 h1 (2.5em ≈ 40px)
+  children.push(
+    container({
+      style: { position: 'absolute', top: HEADER_PAD, left: HEADER_PAD },
+      children: [
+        textNode('Milthm-Calculator', { fontSize: 40, color: '#ffffff' })
+      ]
+    })
+  )
+
+  // 信息文本 (.texts, line-height 1.7em ≈ 27px per line, font-size ~16px)
+  let infoY = HEADER_PAD + 58
+  children.push(
+    container({
+      style: { position: 'absolute', top: infoY, left: HEADER_PAD + 3 },
+      children: [
+        textNode('Generated by milthm-profiler (Koishi)', {
+          fontSize: 14,
+          color: '#cfccdb'
+        })
+      ]
+    })
+  )
+  infoY += 24
+  children.push(
+    container({
+      style: { position: 'absolute', top: infoY, left: HEADER_PAD + 3 },
+      children: [
+        textNode('Chart Progress:', { fontSize: 14, color: '#ffffff' })
+      ]
+    })
+  )
+
+  // Chart Progress 简化 (无法获取全谱面进度, 显示总数)
+  infoY += 24
+  children.push(
+    container({
+      style: { position: 'absolute', top: infoY, left: HEADER_PAD + 3 },
+      children: [
+        textNode(`总谱面数: ${result.totalScores}`, {
+          fontSize: 13,
+          color: '#c4c4c4'
+        })
+      ]
+    })
+  )
+
+  // 右上: 用户名 (.name font-size 1.5em = 24px, text-align right)
+  const rightX = CANVAS_W - HEADER_PAD
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        top: HEADER_PAD + 5,
+        left: rightX - estimateTextW(username, 24)
+      },
+      children: [textNode(username, { fontSize: 24, color: '#ffffff' })]
+    })
+  )
+
+  // Reality 徽章 (flex row-reverse)
+  const realityY = HEADER_PAD + 40
+  const realityVal = result.averageRating.toFixed(2)
+  const realityNumW = estimateTextW(realityVal, 21)
+  const realityBadgeW = 75
+  const realityTotalW = realityBadgeW + 13 + realityNumW
+
+  // "REALITY" 白底圆角框 (.reality-content)
+  const badgeLeft = rightX - realityTotalW
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: badgeLeft,
+        top: realityY,
+        width: realityBadgeW,
+        height: 23,
+        backgroundColor: '#ffffff',
+        borderRadius: 12
+      }
+    })
+  )
+  children.push(
+    container({
+      style: { position: 'absolute', left: badgeLeft + 10, top: realityY + 4 },
+      children: [textNode('REALITY', { fontSize: 12, color: '#000000' })]
+    })
+  )
+
+  // Reality 数值 (.reality-text 1.3em, font-weight 600)
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: badgeLeft + realityBadgeW + 13,
+        top: realityY - 1
+      },
+      children: [textNode(realityVal, { fontSize: 21, color: '#ffffff' })]
+    })
+  )
+
+  // 星标
+  if (starCount > 0) {
+    const starStr = '★'.repeat(starCount)
+    children.push(
+      container({
+        style: {
+          position: 'absolute',
+          left: rightX - estimateTextW(starStr, 20),
+          top: realityY + 30
+        },
+        children: [textNode(starStr, { fontSize: 20, color: '#FFD700' })]
+      })
+    )
   }
-  // 10px 还超宽，截断
-  return { text: limitText(str, 16), fontSize: 10 }
+
+  // TOP20 AVG + Date (右侧下方, line-height 1.7em)
+  const rightInfoY = realityY + (starCount > 0 ? 55 : 35)
+  const avgText = `TOP20 AVG ${result.averageRating.toFixed(5)}`
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: rightX - estimateTextW(avgText, 15),
+        top: rightInfoY
+      },
+      children: [textNode(avgText, { fontSize: 15, color: '#ffffff' })]
+    })
+  )
+
+  const now = new Date()
+  const dateStr = `At ${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0]}`
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: rightX - estimateTextW(dateStr, 15),
+        top: rightInfoY + 26
+      },
+      children: [textNode(dateStr, { fontSize: 15, color: '#ffffff' })]
+    })
+  )
+
+  // Tip (底部左侧, 简单版)
+  const tipY = HEADER_PAD + 145
+  children.push(
+    container({
+      style: { position: 'absolute', left: HEADER_PAD + 3, top: tipY },
+      children: [
+        textNode('Tip: 查分上 https://mhtlim.top/', {
+          fontSize: 13,
+          color: '#ffffff'
+        })
+      ]
+    })
+  )
 }
 
-/**
- * 估算文本像素宽度
- */
-function estimateTextWidth(str: string, fontSize: number): number {
+/* ===== 卡片构建 ===== */
+
+function buildCard(
+  children: any[],
+  item: ProcessedScore,
+  index: number,
+  cardX: number,
+  cardY: number,
+  coverKey: string | null,
+  iconKey: string | null
+) {
+  const highlight = isV3Highlight(item)
+
+  // --- 卡片背景 (.cardcover) ---
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: cardX,
+        top: cardY,
+        width: CARD_W,
+        height: CARD_H,
+        backgroundColor: highlight
+          ? 'rgba(47,46,77,0.85)'
+          : 'rgba(48,48,63,0.85)',
+        borderRadius: CARD_RADIUS
+      }
+    })
+  )
+
+  // --- 封面图 (.cardimgcover 204×115, 垂直居中) ---
+  const coverX = cardX + CARD_PAD
+  const coverY = cardY + (CARD_H - COVER_H) / 2
+  if (coverKey) {
+    children.push(
+      container({
+        style: {
+          position: 'absolute',
+          left: coverX,
+          top: coverY,
+          width: COVER_W,
+          height: COVER_H,
+          borderRadius: COVER_RADIUS,
+          overflow: 'hidden'
+        },
+        children: [
+          image({ src: coverKey, style: { width: COVER_W, height: COVER_H } })
+        ]
+      })
+    )
+  } else {
+    children.push(
+      container({
+        style: {
+          position: 'absolute',
+          left: coverX,
+          top: coverY,
+          width: COVER_W,
+          height: COVER_H,
+          backgroundColor: 'rgba(80,80,100,0.5)',
+          borderRadius: COVER_RADIUS
+        }
+      })
+    )
+  }
+
+  // --- 文字区坐标 ---
+  const textX = coverX + COVER_W + COVER_MR + TEXT_PAD
+  const textStartY = cardY + CARD_PAD
+
+  // --- 排名号 #N (右上, text-align right) ---
+  const rankStr = `#${index + 1}`
+  const rankColor = highlight
+    ? 'rgba(203,190,255,0.93)'
+    : 'rgba(221,227,255,0.79)'
+  const rankW = estimateTextW(rankStr, 14)
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: cardX + CARD_W - CARD_PAD - rankW - 2,
+        top: textStartY + 6
+      },
+      children: [textNode(rankStr, { fontSize: 14, color: rankColor })]
+    })
+  )
+
+  // --- Row 1: 类别色条 + 歌名 ---
+  const row1Y = textStartY + TEXT_PAD
+
+  // 色条 (6×18, border-radius 5)
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: textX + 3,
+        top: row1Y + 1,
+        width: CAT_BAR_W,
+        height: CAT_BAR_H,
+        backgroundColor: getCategoryColor(item.category),
+        borderRadius: 3
+      }
+    })
+  )
+
+  // 歌名 (h4.cardtitle, font-weight normal)
+  const maxTitleLen = 21 - rankStr.length
+  const songName = limitText(item.name, maxTitleLen)
+  children.push(
+    container({
+      style: { position: 'absolute', left: textX + CAT_BAR_W + 10, top: row1Y },
+      children: [textNode(songName, { fontSize: 14, color: '#ffffff' })]
+    })
+  )
+
+  // --- Row 2: 段位图标 + 分数 (.gradetext 2em = 32px, flex) ---
+  const row2Y = row1Y + CAT_BAR_H + 9 // padding-bottom 9px on title row
+
+  // 段位图标 (.grade max-width 50, margin -10)
+  if (iconKey) {
+    children.push(
+      image({
+        src: iconKey,
+        style: {
+          position: 'absolute',
+          left: textX - 5,
+          top: row2Y - 5,
+          width: GRADE_ICON_W,
+          height: GRADE_ICON_W
+        }
+      })
+    )
+  }
+
+  // 分数 (.score padding-left 10, font-size 2em = 32px)
+  const scoreStr = String(item.score).padStart(7, '0')
+  const scoreColor = getScoreColor(item)
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: textX + GRADE_ICON_W + 2,
+        top: row2Y
+      },
+      children: [textNode(scoreStr, { fontSize: 28, color: scoreColor })]
+    })
+  )
+
+  // --- Row 3: 目标分 (font-size 0.9em ≈ 14px, margin-left 9, margin-bottom 5) ---
+  const row3Y = row2Y + 34
+  children.push(
+    container({
+      style: { position: 'absolute', left: textX + 9, top: row3Y },
+      children: [
+        textNode('>> Goal: -', {
+          fontSize: 12,
+          color: 'rgba(221,227,255,0.79)'
+        })
+      ]
+    })
+  )
+
+  // --- Row 4: 准确率 + rating (space-between, font-size 0.85em ≈ 13.6px) ---
+  const row4Y = row3Y + 19
+  const acc = `${(item.accuracy * 100 || 0).toFixed(2)}%`
+  children.push(
+    container({
+      style: { position: 'absolute', left: textX + 3, top: row4Y },
+      children: [
+        textNode(acc, { fontSize: 12, color: 'rgba(255,255,255,0.84)' })
+      ]
+    })
+  )
+
+  // rating (右对齐, V3 时为蓝色 #9ac9ff)
+  const constText = item.constantv3.toFixed(1)
+  const ratingText = `${item.category} ${constText} > ${item.singleRating.toFixed(2)}`
+  const ratingColor = highlight ? '#9ac9ff' : 'rgba(255,255,255,0.84)'
+  const ratingW = estimateTextW(ratingText, 12)
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: cardX + CARD_W - CARD_PAD - ratingW - 5,
+        top: row4Y
+      },
+      children: [textNode(ratingText, { fontSize: 12, color: ratingColor })]
+    })
+  )
+}
+
+/* ===== OVERFLOW 分割线 ===== */
+
+function buildOverflowSplit(children: any[], splitY: number) {
+  // 竖条 (.line: 3px solid #d1d8ff, height 25px, border-radius 100)
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: GRID_PAD_X + 20,
+        top: splitY + 10,
+        width: 6,
+        height: 25,
+        backgroundColor: '#d1d8ff',
+        borderRadius: 3
+      }
+    })
+  )
+  // "OVERFLOW" 文字 (h2, font-weight normal)
+  children.push(
+    container({
+      style: { position: 'absolute', left: GRID_PAD_X + 34, top: splitY + 10 },
+      children: [textNode('OVERFLOW', { fontSize: 22, color: '#d1d8ff' })]
+    })
+  )
+  // 横线 (hr: background-color #bbc5ff, height 4, border-radius 100)
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: GRID_PAD_X + 170,
+        top: splitY + 22,
+        width: CANVAS_W - GRID_PAD_X * 2 - 170,
+        height: 4,
+        backgroundColor: '#bbc5ff',
+        borderRadius: 2
+      }
+    })
+  )
+}
+
+/* ===== Footer ===== */
+
+function buildFooter(children: any[], canvasH: number, footerH: number) {
+  const footerY = canvasH - footerH
+
+  // 底部渐变遮罩 (footer: linear-gradient to bottom #0000→#000B)
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: 0,
+        top: footerY,
+        width: CANVAS_W,
+        height: footerH,
+        backgroundColor: 'rgba(0,0,0,0.4)'
+      }
+    })
+  )
+
+  // 主 footer 文字
+  const footerText =
+    'Generated by Milthm-Calculator | Theme MilAerno Designed by xzadudu179'
+  const footerW = estimateTextW(footerText, 13)
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: (CANVAS_W - footerW) / 2,
+        top: footerY + 25
+      },
+      children: [
+        textNode(footerText, { fontSize: 13, color: 'rgba(255,255,255,0.77)' })
+      ]
+    })
+  )
+
+  // 副 footer 文字
+  const now = new Date()
+  const dateStr = `${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0]}`
+  const subText = `milthm-profiler (Koishi) · ${dateStr}`
+  const subW = estimateTextW(subText, 11)
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: (CANVAS_W - subW) / 2,
+        top: footerY + 50
+      },
+      children: [
+        textNode(subText, { fontSize: 11, color: 'rgba(255,255,255,0.4)' })
+      ]
+    })
+  )
+}
+
+/* ===== 文本宽度估算 ===== */
+
+function estimateTextW(str: string, fontSize: number): number {
   let w = 0
   for (const ch of str) {
     const code = ch.charCodeAt(0)
-    if (code > 255) {
-      w += fontSize * 1.0 // CJK
-    } else if (/[A-Z]/.test(ch) && ch !== 'I') {
-      w += fontSize * 0.65 // 大写字母略宽
-    } else {
-      w += fontSize * 0.55 // 普通 ASCII
-    }
+    if (code > 255)
+      w += fontSize * 1.0 // CJK / emoji
+    else if (/[A-Z]/.test(ch) && ch !== 'I') w += fontSize * 0.7
+    else if (/[a-z]/.test(ch)) w += fontSize * 0.55
+    else if (/[0-9]/.test(ch)) w += fontSize * 0.6
+    else if (ch === ' ') w += fontSize * 0.3
+    else if (ch === '.') w += fontSize * 0.3
+    else w += fontSize * 0.55
   }
   return w
-}
-
-/**
- * 截断歌名（与 web 版 limitText 一致）
- */
-function limitText(str: string, len = 16): string {
-  let l = 0
-  const chars = [...str]
-  for (let i = 0; i < chars.length; i++) {
-    const code = chars[i].charCodeAt(0)
-    if (code > 255) l += 2
-    else if (/[A-Z]/.test(chars[i]) && chars[i] !== 'I') l += 1.5
-    else l += 1
-
-    if (l >= len) {
-      return `${str.slice(0, Math.max(i - 2, 0))}...`
-    }
-  }
-  return str
-}
-
-/**
- * 分数颜色（与 web 版 drawCards 一致）
- * AP (achievedStatus 含 5): 渐变 #99C5FB → #D8C3FA → 近似中间色 #B9B4ED
- * FC (achievedStatus 含 4): #90CAEF
- * 普通: #FFFFFF
- */
-function getScoreColor(item: ProcessedScore): string {
-  if (Array.isArray(item.achievedStatus) && item.achievedStatus.includes(5)) {
-    return '#B9B4ED' // AP 渐变中间色 (无法用纯色完美还原渐变)
-  }
-  if (Array.isArray(item.achievedStatus) && item.achievedStatus.includes(4)) {
-    return '#90CAEF'
-  }
-  return '#FFFFFF'
 }

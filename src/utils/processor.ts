@@ -148,40 +148,9 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
 }
 
 /**
- * 格式化 B20 结果为文本
- */
-export function formatB20Text(result: B20Result): string {
-  if (result.best20.length === 0) {
-    return '暂无成绩数据'
-  }
-
-  let text = `━━━━━━━━━━━━━━━━━━━━\n`
-  text += `    📊 Milthm B20 查分结果\n`
-  text += `━━━━━━━━━━━━━━━━━━━━\n\n`
-  text += `⭐ 平均 Rating: ${result.averageRating.toFixed(2)}\n`
-  text += `📈 总谱面数: ${result.totalScores}\n\n`
-  text += `━━━ Best 20 ━━━\n\n`
-
-  result.best20.forEach((score, index) => {
-    const rankEmoji = getRankEmoji(score.rank)
-    const badgeText = score.isAP ? ' 🎯AP' : score.isFC ? ' 🎵FC' : ''
-
-    text += `#${(index + 1).toString().padStart(2, '0')} ${rankEmoji} ${score.name}\n`
-    text += `   ${score.difficulty} ${score.constant.toFixed(1)} | `
-    text += `${score.score.toLocaleString()} (${score.rank})${badgeText}\n`
-    text += `   Rating: ${score.singleRating.toFixed(2)} | `
-    text += `Acc: ${(score.accuracy * 100).toFixed(2)}%\n\n`
-  })
-
-  text += `━━━━━━━━━━━━━━━━━━━━\n`
-
-  return text
-}
-
-/**
  * 获取评级对应的 Emoji
  */
-function getRankEmoji(rank: string): string {
+function _getRankEmoji(rank: string): string {
   const emojiMap: Record<string, string> = {
     'S++': '🏆',
     'S+': '🥇',

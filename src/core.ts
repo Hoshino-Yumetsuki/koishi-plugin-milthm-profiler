@@ -3,7 +3,6 @@ import type Config from './config'
 import { NyaProfilerClient } from './api/nya-profiler'
 import { MilthmOIDCClient } from './api/milthm-oidc'
 import { SessionManager } from './utils/session'
-import { initAssets, setRendererLogger } from './renderer/image'
 import { setB20AssetsPath } from './renderer/b20-image'
 
 let mainLogger: Logger | null = null
@@ -71,9 +70,7 @@ export async function initClients(ctx: Context, config: Config) {
   sessionManager = new SessionManager()
 
   // 初始化图片渲染器
-  setRendererLogger(ctx.logger('milthm-profiler:renderer'))
   setB20AssetsPath(__dirname)
-  await initAssets(ctx, __dirname)
 
   logger.info('API 客户端初始化完成')
 }
@@ -246,8 +243,7 @@ export function getSessionStatus(userId: string) {
 }
 
 // 导出图片生成功能和数据处理
-export { generateScoreImage } from './renderer/image'
 export { generateB20Image, setB20AssetsPath } from './renderer/b20-image'
 export type { B20UserInfo } from './renderer/b20-image'
-export { processSaveData, formatB20Text } from './utils/processor'
+export { processSaveData } from './utils/processor'
 export * from './utils/calculator'
