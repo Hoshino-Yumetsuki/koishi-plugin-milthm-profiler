@@ -46,6 +46,7 @@ export interface ProcessedScore {
 
 export interface B20Result {
   best20: ProcessedScore[]
+  allScores: ProcessedScore[]
   averageRating: number
   totalScores: number
 }
@@ -60,6 +61,7 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
   if (scores.length === 0) {
     return {
       best20: [],
+      allScores: [],
       averageRating: 0,
       totalScores: 0
     }
@@ -142,6 +144,7 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
 
   return {
     best20,
+    allScores: allBest,
     averageRating,
     totalScores: allBest.length
   }
