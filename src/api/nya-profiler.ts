@@ -22,7 +22,9 @@ export class NyaProfilerClient {
     this.logger.debug(`请求生成授权链接: ${url}`)
 
     try {
-      const response = await fetch(url)
+      const response = await fetch(url, {
+        headers: { Referer: 'https://nya.mhtl.im/' }
+      })
       const responseText = await response.text()
 
       if (!response.ok) {
@@ -82,7 +84,9 @@ export class NyaProfilerClient {
     this.logger.debug(`请求获取授权信息: uuid=${uuid}`)
 
     try {
-      const response = await fetch(url)
+      const response = await fetch(url, {
+        headers: { Referer: 'https://nya.mhtl.im/' }
+      })
       const responseText = await response.text()
 
       if (!response.ok) {
