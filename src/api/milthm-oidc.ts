@@ -291,17 +291,6 @@ export class MilthmOIDCClient {
           error: errorData
         })
 
-        // 检查是否是 token 过期错误
-        if (
-          errorData.code === 'TokenExpireError' ||
-          response.status === 401 ||
-          response.status === 418
-        ) {
-          throw new Error(
-            `Token 已过期，请重新授权。错误信息: ${errorData.message || '未知错误'}`
-          )
-        }
-
         throw new Error(
           `获取存档数据失败: HTTP ${response.status}${errorData.message ? ` ${errorData.message}` : ''}`
         )
@@ -324,11 +313,6 @@ export class MilthmOIDCClient {
           body: responseText
         })
         this.logger.error('API 返回错误', { error: data })
-
-        // 检查是否是 token 过期错误
-        if (data.code === 'TokenExpireError') {
-          throw new Error(`Token 已过期，请重新授权。错误信息: ${data.message}`)
-        }
 
         throw new Error(`API 错误: ${JSON.stringify(data)}`)
       }

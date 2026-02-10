@@ -163,7 +163,6 @@ export async function waitForAuthAndFetchData(
     logger.info(`成功获取用户 ${userId} 的信息`)
 
     // 等待5秒以避免JWT时钟偏移问题
-    logger.info(`等待5秒以避免服务器时钟偏移问题...`)
     await new Promise((resolve) => setTimeout(resolve, 5000))
 
     // 获取存档数据
