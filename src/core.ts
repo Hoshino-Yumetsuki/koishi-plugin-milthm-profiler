@@ -164,7 +164,7 @@ export async function waitForAuthAndFetchData(
 
     // 等待5秒以避免JWT时钟偏移问题
     logger.info(`等待5秒以避免服务器时钟偏移问题...`)
-    await new Promise(resolve => setTimeout(resolve, 5000))
+    await new Promise((resolve) => setTimeout(resolve, 5000))
 
     // 获取存档数据
     const saveDataInfo = await milthmOIDCClient.getUserSaveData(

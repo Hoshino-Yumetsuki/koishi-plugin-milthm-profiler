@@ -1124,7 +1124,7 @@ function buildCard(
 
   // rating (右对齐, V3 时为蓝色 #9ac9ff)
   const constText = item.constantv3.toFixed(1)
-  const ratingText = `${item.category} ${constText} > ${item.singleRating.toFixed(2)}`
+  const ratingText = `${item.category} ${constText} > ${item.singleRating.toFixed(5)}`
   const ratingColor = highlight ? '#9ac9ff' : 'rgba(255,255,255,0.84)'
   const ratingW = estimateTextW(ratingText, 12)
   children.push(

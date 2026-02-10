@@ -86,9 +86,9 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
         (score.achievedStatus.includes(2) || score.achievedStatus.includes(5))) // 特殊成就
 
     // 三路分支计算 singleRating（与 milthm-calculator-web 一致）
-    // 1. isV3 → 用 V3 公式 + V3 定数
+    // 1. isV3 → 用 V3 公式（realityv3）+ V3 定数
     // 2. useV3 但非 isV3 → 直接给 constantv3 + 1.5（V3 满分值）
-    // 3. 其他 → 用 V2 公式 + V2 定数
+    // 3. 其他 → 用 V2 公式（reality）+ V2 定数
     let singleRating: number
     let constant: number
     if (score.isV3) {
@@ -98,7 +98,7 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
       constant = chartInfo.constantv3
       singleRating = constant > 1e-5 ? constant + 1.5 : 0
     } else {
-      constant = chartInfo.constantv2 || chartInfo.constantv3
+      constant = chartInfo.constant
       singleRating = calculateSingleRatingV2(constant, score.score)
     }
     const rank = getRank(score.score)

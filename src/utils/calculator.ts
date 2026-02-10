@@ -138,7 +138,7 @@ export function calculateRating(
   const isAP = result.perfect === result.totalNotes
 
   return {
-    rating: Math.round(rating * 100) / 100, // 保留两位小数
+    rating: Math.round(rating * 100000) / 100000, // 保留五位小数
     rank,
     isFC,
     isAP
@@ -152,7 +152,7 @@ export function calculateAverageRating(ratings: number[]): number {
 
   const best20 = [...ratings].sort((a, b) => b - a).slice(0, 20)
   const sum = best20.reduce((acc, r) => acc + r, 0)
-  return Math.round((sum / 20) * 100) / 100
+  return Math.round((sum / 20) * 100000) / 100000
 }
 
 // 从存档 JSON 解析歌曲成绩数据
