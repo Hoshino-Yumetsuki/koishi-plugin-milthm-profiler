@@ -38,10 +38,11 @@ export function apply(ctx: Context, config: Config) {
         // 生成授权链接
         const { url } = await generateAuthUrlForUser(userId)
 
-        // 发送授权链接给用户
-        await session.send(
-          `请点击以下链接完成授权（60秒内有效）：\n${url}\n\n授权完成后，我将自动为您获取数据...`
-        )
+        // 分段发送：先发提示信息
+        await session.send('请在浏览器中打开以下链接完成授权（60秒内有效）：')
+        // 单独发送链接，方便复制
+        await session.send(url)
+        await session.send('授权完成后将自动获取数据，请稍候...')
 
         // 等待授权并获取数据
         const data = await waitForAuthAndFetchData(userId, config)
@@ -71,7 +72,7 @@ export function apply(ctx: Context, config: Config) {
         return h.image(imageBuffer, 'image/png')
       } catch (error) {
         logger.error('查分失败', { error, userId })
-        return formatError(error)
+        return `查分失败: ${error instanceof Error ? error.message : String(error)}`
       }
     })
 
@@ -95,19 +96,6 @@ function setupLogger(config: Config) {
   if (config.isLog) {
     setLoggerLevel(Logger.DEBUG)
   }
-}
-
-function formatError(error: unknown): string {
-  if (error instanceof Error) {
-    if (error.message.includes('授权超时')) {
-      return '授权超时，请重新尝试'
-    }
-    if (error.message.includes('找不到用户的授权会话')) {
-      return '当前没有进行中的授权请求，请先发送查分命令'
-    }
-    return `查分失败: ${error.message}`
-  }
-  return `查分失败: ${String(error)}`
 }
 
 export * from './config'
