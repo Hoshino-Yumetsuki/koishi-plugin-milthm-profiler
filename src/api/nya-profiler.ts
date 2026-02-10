@@ -23,9 +23,32 @@ export class NyaProfilerClient {
 
     try {
       const response = await fetch(url)
-      const data: NyaProfilerGenResponse = await response.json()
+      const responseText = await response.text()
+
+      if (!response.ok) {
+        this.logger.debug( {
+          status: response.status,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: responseText
+        })
+        throw new Error(`生成授权链接失败: ${response.status} ${responseText}`)
+      }
+
+      let data: NyaProfilerGenResponse
+      try {
+        data = JSON.parse(responseText)
+      } catch {
+        this.logger.debug( {
+          status: response.status,
+          body: responseText
+        })
+        throw new Error(`生成授权链接响应解析失败 ${responseText}`)
+      }
 
       if (data.result !== '200') {
+        this.logger.debug( {
+          body: responseText
+        })
         throw new Error(`生成授权链接失败: ${data.message}`)
       }
 
@@ -60,7 +83,27 @@ export class NyaProfilerClient {
 
     try {
       const response = await fetch(url)
-      const data: NyaProfilerFetchResponse = await response.json()
+      const responseText = await response.text()
+
+      if (!response.ok) {
+        this.logger.debug( {
+          status: response.status,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: responseText
+        })
+        throw new Error(`获取授权信息失败: ${response.status} ${responseText}`)
+      }
+
+      let data: NyaProfilerFetchResponse
+      try {
+        data = JSON.parse(responseText)
+      } catch {
+        this.logger.debug( {
+          status: response.status,
+          body: responseText
+        })
+        throw new Error(`获取授权信息响应解析失败 ${responseText}`)
+      }
 
       if (data.result === '404') {
         // 找不到目标记录，说明用户还未授权
@@ -68,6 +111,9 @@ export class NyaProfilerClient {
       }
 
       if (data.result !== '200') {
+        this.logger.debug( {
+          body: responseText
+        })
         throw new Error(`获取授权信息失败: ${data.message}`)
       }
 
