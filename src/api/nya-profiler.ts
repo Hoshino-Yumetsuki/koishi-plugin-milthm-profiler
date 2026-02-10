@@ -28,27 +28,27 @@ export class NyaProfilerClient {
       const responseText = await response.text()
 
       if (!response.ok) {
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           headers: Object.fromEntries(response.headers.entries()),
           body: responseText
         })
-        throw new Error(`生成授权链接失败: ${response.status} ${responseText}`)
+        throw new Error(`生成授权链接失败: HTTP ${response.status}`)
       }
 
       let data: NyaProfilerGenResponse
       try {
         data = JSON.parse(responseText)
       } catch {
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           body: responseText
         })
-        throw new Error(`生成授权链接响应解析失败 ${responseText}`)
+        throw new Error('生成授权链接响应解析失败，请开启 debug 日志查看详情')
       }
 
       if (data.result !== '200') {
-        this.logger.debug( {
+        this.logger.debug({
           body: responseText
         })
         throw new Error(`生成授权链接失败: ${data.message}`)
@@ -90,23 +90,23 @@ export class NyaProfilerClient {
       const responseText = await response.text()
 
       if (!response.ok) {
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           headers: Object.fromEntries(response.headers.entries()),
           body: responseText
         })
-        throw new Error(`获取授权信息失败: ${response.status} ${responseText}`)
+        throw new Error(`获取授权信息失败: HTTP ${response.status}`)
       }
 
       let data: NyaProfilerFetchResponse
       try {
         data = JSON.parse(responseText)
       } catch {
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           body: responseText
         })
-        throw new Error(`获取授权信息响应解析失败 ${responseText}`)
+        throw new Error('获取授权信息响应解析失败，请开启 debug 日志查看详情')
       }
 
       if (data.result === '404') {
@@ -115,7 +115,7 @@ export class NyaProfilerClient {
       }
 
       if (data.result !== '200') {
-        this.logger.debug( {
+        this.logger.debug({
           body: responseText
         })
         throw new Error(`获取授权信息失败: ${data.message}`)

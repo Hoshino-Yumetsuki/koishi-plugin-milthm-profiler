@@ -42,7 +42,7 @@ export class MilthmOIDCClient {
       const responseText = await response.text()
 
       if (!response.ok) {
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           headers: Object.fromEntries(response.headers.entries()),
           body: responseText
@@ -51,18 +51,18 @@ export class MilthmOIDCClient {
           status: response.status,
           error: responseText
         })
-        throw new Error(`换取令牌失败: ${response.status} ${responseText}`)
+        throw new Error(`换取令牌失败: HTTP ${response.status}`)
       }
 
       let data: OIDCTokenResponse
       try {
         data = JSON.parse(responseText)
       } catch {
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           body: responseText
         })
-        throw new Error(`换取令牌响应解析失败 ${responseText}`)
+        throw new Error('换取令牌响应解析失败，请开启 debug 日志查看详情')
       }
 
       this.logger.debug('成功获取访问令牌', {
@@ -96,7 +96,7 @@ export class MilthmOIDCClient {
       const responseText = await response.text()
 
       if (!response.ok) {
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           headers: Object.fromEntries(response.headers.entries()),
           body: responseText
@@ -105,18 +105,18 @@ export class MilthmOIDCClient {
           status: response.status,
           error: responseText
         })
-        throw new Error(`获取用户信息失败: ${response.status} ${responseText}`)
+        throw new Error(`获取用户信息失败: HTTP ${response.status}`)
       }
 
       let data: MilthmUserData
       try {
         data = JSON.parse(responseText)
       } catch {
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           body: responseText
         })
-        throw new Error(`获取用户信息响应解析失败 ${responseText}`)
+        throw new Error('获取用户信息响应解析失败，请开启 debug 日志查看详情')
       }
 
       this.logger.debug('成功获取用户信息')
@@ -159,7 +159,7 @@ export class MilthmOIDCClient {
           errorData = { message: responseText }
         }
 
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           headers: Object.fromEntries(response.headers.entries()),
           body: responseText
@@ -180,13 +180,13 @@ export class MilthmOIDCClient {
       try {
         userInfo = JSON.parse(responseText)
       } catch {
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           body: responseText
         })
         return {
           isValid: false,
-          error: `响应解析失败 ${responseText}`
+          error: '响应解析失败，请开启 debug 日志查看详情'
         }
       }
 
@@ -220,7 +220,7 @@ export class MilthmOIDCClient {
       const responseText = await response.text()
 
       if (!response.ok) {
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           headers: Object.fromEntries(response.headers.entries()),
           body: responseText
@@ -229,18 +229,18 @@ export class MilthmOIDCClient {
           status: response.status,
           error: responseText
         })
-        throw new Error(`获取 JWKS 失败: ${response.status} ${responseText}`)
+        throw new Error(`获取 JWKS 失败: HTTP ${response.status}`)
       }
 
       let data: any
       try {
         data = JSON.parse(responseText)
       } catch {
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           body: responseText
         })
-        throw new Error(`获取 JWKS 响应解析失败 ${responseText}`)
+        throw new Error('获取 JWKS 响应解析失败，请开启 debug 日志查看详情')
       }
 
       this.logger.debug('成功获取 JWKS')
@@ -281,7 +281,7 @@ export class MilthmOIDCClient {
           errorData = { message: responseText }
         }
 
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           headers: Object.fromEntries(response.headers.entries()),
           body: responseText
@@ -298,12 +298,12 @@ export class MilthmOIDCClient {
           response.status === 418
         ) {
           throw new Error(
-            `Token 已过期，请重新授权。错误信息: ${errorData.message || responseText}`
+            `Token 已过期，请重新授权。错误信息: ${errorData.message || '未知错误'}`
           )
         }
 
         throw new Error(
-          `获取存档数据失败: ${response.status} ${errorData.message || responseText}`
+          `获取存档数据失败: HTTP ${response.status}${errorData.message ? ` ${errorData.message}` : ''}`
         )
       }
 
@@ -311,16 +311,16 @@ export class MilthmOIDCClient {
       try {
         data = JSON.parse(responseText)
       } catch {
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           body: responseText
         })
-        throw new Error(`获取存档数据响应解析失败 ${responseText}`)
+        throw new Error('获取存档数据响应解析失败，请开启 debug 日志查看详情')
       }
 
       // 检查错误
       if (data.code?.includes('Error')) {
-        this.logger.debug( {
+        this.logger.debug({
           body: responseText
         })
         this.logger.error('API 返回错误', { error: data })
@@ -366,7 +366,7 @@ export class MilthmOIDCClient {
 
       if (!response.ok) {
         const errorText = await response.text()
-        this.logger.debug( {
+        this.logger.debug({
           status: response.status,
           headers: Object.fromEntries(response.headers.entries()),
           body: errorText
