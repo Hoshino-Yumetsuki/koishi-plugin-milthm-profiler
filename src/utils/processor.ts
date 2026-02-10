@@ -1,8 +1,3 @@
-/**
- * 存档数据处理模块
- * 负责解析存档、匹配定数、计算 rating、生成 B20 列表
- */
-
 import type { Context } from 'koishi'
 import {
   parseSaveData,

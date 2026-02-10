@@ -1,8 +1,3 @@
-/**
- * 定数数据加载器
- * 从 constantData.json 加载歌曲定数信息
- */
-
 import constantDataRaw from '../data/constantData.json'
 
 export interface ConstantDataEntry {

@@ -3,7 +3,7 @@ import type Config from './config'
 import { NyaProfilerClient } from './api/nya-profiler'
 import { MilthmOIDCClient } from './api/milthm-oidc'
 import { SessionManager } from './utils/session'
-import { setB20AssetsPath } from './renderer/b20-image'
+import { setB20AssetsPath } from './renderer/image'
 
 let mainLogger: Logger | null = null
 
@@ -47,9 +47,6 @@ let nyaProfilerClient: NyaProfilerClient | null = null
 let milthmOIDCClient: MilthmOIDCClient | null = null
 let sessionManager: SessionManager | null = null
 
-/**
- * 初始化 API 客户端
- */
 export async function initClients(ctx: Context, config: Config) {
   logger.info('初始化 API 客户端')
 
@@ -75,9 +72,6 @@ export async function initClients(ctx: Context, config: Config) {
   logger.info('API 客户端初始化完成')
 }
 
-/**
- * 为用户生成授权链接
- */
 export async function generateAuthUrlForUser(
   userId: string
 ): Promise<{ url: string; uuid: string }> {
@@ -243,7 +237,7 @@ export function getSessionStatus(userId: string) {
 }
 
 // 导出图片生成功能和数据处理
-export { generateB20Image, setB20AssetsPath } from './renderer/b20-image'
-export type { B20UserInfo } from './renderer/b20-image'
+export { generateB20Image, setB20AssetsPath } from './renderer/image'
+export type { B20UserInfo } from './renderer/image'
 export { processSaveData } from './utils/processor'
 export * from './utils/calculator'

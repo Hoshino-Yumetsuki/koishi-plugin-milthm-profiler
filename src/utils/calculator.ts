@@ -56,9 +56,8 @@ const RANK_THRESHOLDS = {
   F: 0
 }
 
-/**
- * 计算得分
- */
+// 计算得分
+
 export function calculateScore(result: ScoreResult): number {
   const totalWeight =
     result.perfect * NOTE_WEIGHTS.perfect +
@@ -72,17 +71,13 @@ export function calculateScore(result: ScoreResult): number {
   return Math.floor((totalWeight / maxWeight) * 1_000_000)
 }
 
-/**
- * 计算准确率
- */
+// 计算准确率
 export function calculateAccuracy(result: ScoreResult): number {
   const score = result.score || calculateScore(result)
   return (score / 1_000_000) * 100
 }
 
-/**
- * 获取评级
- */
+// 获取评级
 export function getRank(score: number): string {
   for (const [rank, threshold] of Object.entries(RANK_THRESHOLDS)) {
     if (score >= threshold) {
@@ -92,10 +87,7 @@ export function getRank(score: number): string {
   return 'F'
 }
 
-/**
- * 计算单曲 Rating (V3 版本)
- * 参考 milthm-calculator-web 的 realityv3 函数
- */
+// 计算单曲 Rating (V3 版本)
 export function calculateSingleRating(constant: number, score: number): number {
   if (constant < 0.001) return 0
   if (score >= 1_000_000) return constant + 1.5
@@ -112,10 +104,7 @@ export function calculateSingleRating(constant: number, score: number): number {
   }
   return 0
 }
-
-/**
- * 完整计算 Rating 结果
- */
+// 完整计算 Rating 结果
 export function calculateRating(
   song: SongInfo,
   result: ScoreResult
@@ -135,9 +124,8 @@ export function calculateRating(
   }
 }
 
-/**
- * 计算 Best 20 平均 Rating (Milthm 使用 B20)
- */
+// 计算 Best 20 平均 Rating (Milthm 使用 B20)
+
 export function calculateAverageRating(ratings: number[]): number {
   if (ratings.length === 0) return 0
 
@@ -146,9 +134,7 @@ export function calculateAverageRating(ratings: number[]): number {
   return Math.round((sum / 20) * 100) / 100
 }
 
-/**
- * 从存档 JSON 解析歌曲成绩数据
- */
+// 从存档 JSON 解析歌曲成绩数据
 export interface SaveDataScore {
   chart_id: string
   score: number

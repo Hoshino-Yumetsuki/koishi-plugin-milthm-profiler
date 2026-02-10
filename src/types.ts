@@ -37,6 +37,5 @@ export interface AuthSession {
 
 // Milthm 用户数据类型（根据实际 API 调整）
 export interface MilthmUserData {
-  // TODO: 根据实际的 Milthm API 响应定义
   [key: string]: any
 }

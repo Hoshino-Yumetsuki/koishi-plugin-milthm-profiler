@@ -1,9 +1,5 @@
 import type { AuthSession } from '../types'
 
-/**
- * 会话管理器
- * 用于管理用户的授权会话
- */
 export class SessionManager {
   private sessions: Map<string, AuthSession> = new Map()
 
