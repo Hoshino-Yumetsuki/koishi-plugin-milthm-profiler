@@ -1,20 +1,15 @@
-import constantDataRaw from '../data/constantData.json'
+import constantsData from '../data/constant'
 
 export interface ConstantDataEntry {
-  constant: number // V2 定数（旧版，数组第一个元素）
-  constantv3: number // V3 定数（新版，数组第二个元素，或与 V2 相同）
-  difficulty: string // 'CL' | 'CB' | 'SK' | 'DZ' | 'SP'
+  constant: number // V2 定数（旧版）
+  constantv3: number // V3 定数（新版，4.0+）
+  difficulty: string // 'CL' | 'CB' | 'SK' | 'DZ' | 'SP' | 'Ø' | 'CB*' | 'SK*' | 'DZ*'
   name: string
-  bpm: number | null
-  noteCount: number
+  noteCount: number // yct 字段（物量估算）
 }
 
-// 全局缓存
 let constantDataCache: Map<string, ConstantDataEntry> | null = null
 
-/**
- * 加载定数数据
- */
 export function loadConstantData(): Map<string, ConstantDataEntry> {
   if (constantDataCache) {
     return constantDataCache
@@ -22,39 +17,24 @@ export function loadConstantData(): Map<string, ConstantDataEntry> {
 
   const dataMap = new Map<string, ConstantDataEntry>()
 
-  for (const [chartId, values] of Object.entries(constantDataRaw)) {
-    const arr = values as any[]
+  for (const [chartId, rawArr] of Object.entries(constantsData)) {
+    const arr = [...rawArr]
 
-    // 数据格式有两种（与 milthm-calculator-web constant.js 一致）:
-    // 1. [constant(v2), constantv3, difficulty, name, bpm, noteCount, ...]
-    // 2. [constant, difficulty, name, bpm, noteCount, ...] (v2=v3)
-    let constant = 0
-    let constantv3 = 0
-    let difficulty = ''
-    let name = ''
-    let bpm = null
-    let noteCount = 0
+    if (typeof arr[1] !== 'number') {
+      arr.splice(1, 0, arr[0])
+    }
 
-    if (
-      typeof arr[0] === 'number' &&
-      typeof arr[1] === 'number' &&
-      typeof arr[2] === 'string'
-    ) {
-      // 格式 1: 有双定数 [v2, v3, difficulty, ...]
-      constant = arr[0]
-      constantv3 = arr[1]
-      difficulty = arr[2]
-      name = arr[3] || '未知曲目'
-      bpm = arr[4]
-      noteCount = arr[5] || 0
-    } else if (typeof arr[0] === 'number' && typeof arr[1] === 'string') {
-      // 格式 2: 单定数 [constant, difficulty, ...] → v2 = v3
-      constant = arr[0]
-      constantv3 = arr[0]
-      difficulty = arr[1]
-      name = arr[2] || '未知曲目'
-      bpm = arr[3]
-      noteCount = arr[4] || 0
+    // 解析后数组格式统一为:
+    // [constant, constantv3, category, name, yct, ad, ae, af, ag]
+    const constant = (arr[0] as number) ?? 0
+    const constantv3 = (arr[1] as number) ?? 0
+    const difficulty = (arr[2] as string) ?? ''
+    const name = (arr[3] as string) || '未知曲目'
+
+    // yct 字段：如果不存在则取 ceil(constantv3 * 20)
+    let noteCount = arr[4] as number | undefined
+    if (noteCount == null) {
+      noteCount = constantv3 != null ? Math.ceil(constantv3 * 20) : 0
     }
 
     dataMap.set(chartId, {
@@ -62,7 +42,6 @@ export function loadConstantData(): Map<string, ConstantDataEntry> {
       constantv3,
       difficulty: difficulty || 'CB',
       name,
-      bpm,
       noteCount
     })
   }
@@ -71,9 +50,6 @@ export function loadConstantData(): Map<string, ConstantDataEntry> {
   return dataMap
 }
 
-/**
- * 难度代码转换为可读名称
- */
 export function difficultyToName(diff: string): string {
   const map: Record<string, string> = {
     CL: 'CELESTIAL',
@@ -83,7 +59,8 @@ export function difficultyToName(diff: string): string {
     SP: 'SPECIAL',
     'CB*': 'CHERISH*',
     'SK*': 'SEEKER*',
-    'DZ*': 'DAZE*'
+    'DZ*': 'DAZE*',
+    Ø: 'Ø'
   }
   return map[diff] || diff
 }
