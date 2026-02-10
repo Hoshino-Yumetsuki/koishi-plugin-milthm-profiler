@@ -2,6 +2,7 @@ import type { Context } from 'koishi'
 import {
   parseSaveData,
   calculateSingleRating,
+  calculateSingleRatingV2,
   calculateAverageRating,
   getRank
 } from './calculator'
@@ -84,11 +85,22 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
       (score.achievedStatus &&
         (score.achievedStatus.includes(2) || score.achievedStatus.includes(5))) // 特殊成就
 
-    // 根据条件选择定数和计算方式
-    const constant = useV3
-      ? chartInfo.constantv3
-      : chartInfo.constantv2 || chartInfo.constantv3
-    const singleRating = calculateSingleRating(constant, score.score)
+    // 三路分支计算 singleRating（与 milthm-calculator-web 一致）
+    // 1. isV3 → 用 V3 公式 + V3 定数
+    // 2. useV3 但非 isV3 → 直接给 constantv3 + 1.5（V3 满分值）
+    // 3. 其他 → 用 V2 公式 + V2 定数
+    let singleRating: number
+    let constant: number
+    if (score.isV3) {
+      constant = chartInfo.constantv3
+      singleRating = calculateSingleRating(constant, score.score)
+    } else if (useV3) {
+      constant = chartInfo.constantv3
+      singleRating = constant > 1e-5 ? constant + 1.5 : 0
+    } else {
+      constant = chartInfo.constantv2 || chartInfo.constantv3
+      singleRating = calculateSingleRatingV2(constant, score.score)
+    }
     const rank = getRank(score.score)
 
     // FC/AP 判断
@@ -119,12 +131,41 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
     })
   }
 
-  // 按每个谱面保留最高分
+  // 按每个谱面合并记录（与 milthm-calculator-web mergeSongVersions 一致）
   const bestScores = new Map<string, ProcessedScore>()
   for (const score of processedScores) {
     const existing = bestScores.get(score.chart_id)
-    if (!existing || score.score > existing.score) {
+    if (!existing) {
       bestScores.set(score.chart_id, score)
+    } else {
+      // 合并策略：
+      // - singleRating: 取最高（V2 和 V3 谁高用谁）
+      // - score: 取最高
+      // - accuracy: 取最高
+      // - bestLevel: 取最小（等级越低越好）
+      // - achievedStatus: 取并集
+      // - isV3: 逻辑或
+      if (score.singleRating > existing.singleRating) {
+        // 用更高 rating 的记录作为基础
+        const merged = { ...score }
+        merged.score = Math.max(existing.score, score.score)
+        merged.accuracy = Math.max(existing.accuracy, score.accuracy)
+        merged.bestLevel = Math.min(existing.bestLevel, score.bestLevel)
+        merged.achievedStatus = [
+          ...new Set([...existing.achievedStatus, ...score.achievedStatus])
+        ]
+        merged.isV3 = existing.isV3 || score.isV3
+        bestScores.set(score.chart_id, merged)
+      } else {
+        // 保留已有记录但合并字段
+        existing.score = Math.max(existing.score, score.score)
+        existing.accuracy = Math.max(existing.accuracy, score.accuracy)
+        existing.bestLevel = Math.min(existing.bestLevel, score.bestLevel)
+        existing.achievedStatus = [
+          ...new Set([...existing.achievedStatus, ...score.achievedStatus])
+        ]
+        existing.isV3 = existing.isV3 || score.isV3
+      }
     }
   }
 
@@ -143,21 +184,4 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
     averageRating,
     totalScores: allBest.length
   }
-}
-
-/**
- * 获取评级对应的 Emoji
- */
-function _getRankEmoji(rank: string): string {
-  const emojiMap: Record<string, string> = {
-    'S++': '🏆',
-    'S+': '🥇',
-    S: '🥈',
-    A: '🥉',
-    B: '📘',
-    C: '📙',
-    D: '📕',
-    F: '💀'
-  }
-  return emojiMap[rank] || '⭐'
 }

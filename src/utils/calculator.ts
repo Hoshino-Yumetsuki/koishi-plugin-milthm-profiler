@@ -104,6 +104,27 @@ export function calculateSingleRating(constant: number, score: number): number {
   }
   return 0
 }
+
+// 计算单曲 Rating (V2 版本，4.0 之前的旧公式)
+export function calculateSingleRatingV2(
+  constant: number,
+  score: number
+): number {
+  if (constant < 0.001) return 0
+  if (score >= 1_005_000) return 1 + constant
+  if (score >= 995_000)
+    return 1.4 / (Math.exp(363.175 - score * 0.000365) + 1) - 0.4 + constant
+  if (score >= 980_000)
+    return (
+      ((Math.exp((3.1 * (score - 980_000)) / 15_000) - 1) /
+        (Math.exp(3.1) - 1)) *
+        0.8 -
+      0.5 +
+      constant
+    )
+  if (score >= 700_000) return score / 280_000 - 4 + constant
+  return 0
+}
 // 完整计算 Rating 结果
 export function calculateRating(
   song: SongInfo,
@@ -175,25 +196,22 @@ export function parseSaveData(saveContent: string): SaveDataScore[] {
       }
     }
 
-    // 解析旧版记录（作为后备）
+    // 解析旧版记录（全部包含，后续通过合并逻辑取最优值）
     if (data.SongRecords && Array.isArray(data.SongRecords)) {
       for (const record of data.SongRecords) {
-        // 避免重复添加同一个 BeatmapID
-        if (!scores.some((s) => s.chart_id === record.BeatmapID)) {
-          scores.push({
-            chart_id: record.BeatmapID || '',
-            score: record.BestScore || 0,
-            accuracy: record.BestAccuracy || 0,
-            perfect_count: 0,
-            good_count: 0,
-            bad_count: 0,
-            miss_count: 0,
-            played_at: '',
-            isV3: false,
-            bestLevel: record.BestLevel,
-            achievedStatus: record.AchievedStatus || []
-          })
-        }
+        scores.push({
+          chart_id: record.BeatmapID || '',
+          score: record.BestScore || 0,
+          accuracy: record.BestAccuracy || 0,
+          perfect_count: 0,
+          good_count: 0,
+          bad_count: 0,
+          miss_count: 0,
+          played_at: '',
+          isV3: false,
+          bestLevel: record.BestLevel,
+          achievedStatus: record.AchievedStatus || []
+        })
       }
     }
 
