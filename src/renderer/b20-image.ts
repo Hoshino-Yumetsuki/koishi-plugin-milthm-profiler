@@ -434,8 +434,19 @@ export async function generateB20Image(
     })
   )
 
+  // ===== 预加载星标图片 =====
+  const starCount = calculateStars(result.allScores || items)
+  let starImageKey: string | null = null
+  if (starCount > 0) {
+    const starPng = await loadAvifImage(`covers/${starCount}-star.avif`)
+    if (starPng) {
+      starImageKey = `star_${starCount}`
+      registerImage(r, starImageKey, starPng)
+    }
+  }
+
   // ===== 头部内容 =====
-  buildHeader(children, result, userInfo, items)
+  buildHeader(children, result, userInfo, items, starImageKey)
 
   // ===== B20 卡片 =====
   const gridStartY = headerH
@@ -513,7 +524,8 @@ function buildHeader(
   children: any[],
   result: B20Result,
   userInfo: B20UserInfo | undefined,
-  items: ProcessedScore[]
+  items: ProcessedScore[],
+  starImageKey: string | null
 ) {
   const username = userInfo?.username || userInfo?.nickname || 'UNKNOWN'
   const starCount = calculateStars(result.allScores || items)
@@ -806,17 +818,18 @@ function buildHeader(
     })
   )
 
-  // 星标 (使用对应星级图标; 回退为文字星)
-  if (starCount > 0) {
-    const starStr = '★'.repeat(Math.min(starCount, 5))
+  // 星标 (使用对应星级图标)
+  if (starCount > 0 && starImageKey) {
+    const starImgW = 80
     children.push(
-      container({
+      image({
+        src: starImageKey,
         style: {
           position: 'absolute',
-          left: rightX - estimateTextW(starStr, 20),
-          top: realityY + 30
-        },
-        children: [textNode(starStr, { fontSize: 20, color: '#FFD700' })]
+          left: rightX - starImgW,
+          top: realityY + 28,
+          width: starImgW
+        }
       })
     )
   }
@@ -849,18 +862,18 @@ function buildHeader(
   )
 
   // Tip (底部左侧)
-  const tipY = infoY + 10
-  children.push(
-    container({
-      style: { position: 'absolute', left: HEADER_PAD + 3, top: tipY },
-      children: [
-        textNode('Tip: 查分上 https://mhtlim.top/', {
-          fontSize: 13,
-          color: '#ffffff'
-        })
-      ]
-    })
-  )
+  // const tipY = infoY + 10
+  // children.push(
+  // container({
+  // style: { position: 'absolute', left: HEADER_PAD + 3, top: tipY },
+  // children: [
+  // textNode('Tip: 查分上 https://mhtlim.top/', {
+  // fontSize: 13,
+  // color: '#ffffff'
+  // })
+  // ]
+  // })
+  // )
 }
 
 /* ===== Chart Progress 计算 ===== */
