@@ -34,7 +34,7 @@ export const Config: Schema<Config> = Schema.object({
   }).description('Milthm API 配置'),
 
   pollTimeout: Schema.number()
-    .default(60)
+    .default(300)
     .description('授权轮询超时时间（秒）'),
 
   pollInterval: Schema.number().default(5).description('授权轮询间隔（秒）'),

@@ -506,7 +506,7 @@ export async function generateB20Image(
     height: canvasH,
     format: 'png'
   })
-  return Buffer.from(buffer)
+  return Buffer.from(buffer.asUint8Array())
 }
 
 /* ===== 头部构建 ===== */

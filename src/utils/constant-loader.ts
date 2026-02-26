@@ -1,4 +1,5 @@
-import constantsData from '../data/constant'
+/// <reference path="../env.d.ts" />
+import constantsData from 'virtual:milthm-constants'
 
 export interface ConstantDataEntry {
   constant: number // V2 定数（旧版）

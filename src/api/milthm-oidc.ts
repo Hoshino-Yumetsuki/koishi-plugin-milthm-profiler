@@ -78,6 +78,65 @@ export class MilthmOIDCClient {
   }
 
   /**
+   * 使用 refresh_token 刷新访问令牌
+   * @param refreshToken 刷新令牌
+   * @returns 新的访问令牌响应
+   */
+  async refreshAccessToken(refreshToken: string): Promise<OIDCTokenResponse> {
+    this.logger.debug('使用 refresh_token 刷新访问令牌')
+
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: this.clientId,
+      client_secret: this.clientSecret
+    })
+
+    try {
+      const response = await fetch(TOKEN_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: params.toString()
+      })
+
+      const responseText = await response.text()
+
+      if (!response.ok) {
+        this.logger.debug({
+          status: response.status,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: responseText
+        })
+        this.logger.error('刷新令牌失败', {
+          status: response.status,
+          error: responseText
+        })
+        throw new Error(`刷新令牌失败: HTTP ${response.status}`)
+      }
+
+      let data: OIDCTokenResponse
+      try {
+        data = JSON.parse(responseText)
+      } catch {
+        this.logger.debug({ status: response.status, body: responseText })
+        throw new Error('刷新令牌响应解析失败，请开启 debug 日志查看详情')
+      }
+
+      this.logger.debug('成功刷新访问令牌', {
+        token_type: data.token_type,
+        expires_in: data.expires_in
+      })
+
+      return data
+    } catch (error) {
+      this.logger.error('刷新令牌时发生错误', { error })
+      throw error
+    }
+  }
+
+  /**
    * 获取用户信息
    * @param accessToken 访问令牌
    * @returns 用户信息

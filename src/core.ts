@@ -4,6 +4,14 @@ import { NyaProfilerClient } from './api/nya-profiler'
 import { MilthmOIDCClient } from './api/milthm-oidc'
 import { SessionManager } from './utils/session'
 import { setB20AssetsPath } from './renderer/image'
+import {
+  saveCredentials,
+  loadCredentials,
+  saveRecord,
+  loadRecord,
+  type UserCredentials,
+  type UserSaveRecord
+} from './utils/credentials'
 
 let mainLogger: Logger | null = null
 
@@ -46,9 +54,12 @@ export function setMainLogger(newLogger: Logger) {
 let nyaProfilerClient: NyaProfilerClient | null = null
 let milthmOIDCClient: MilthmOIDCClient | null = null
 let sessionManager: SessionManager | null = null
+let koishiBaseDir: string | null = null
 
 export async function initClients(ctx: Context, config: Config) {
   logger.info('初始化 API 客户端')
+
+  koishiBaseDir = ctx.baseDir
 
   const clientLogger = ctx.logger('milthm-profiler:client')
 
@@ -93,8 +104,10 @@ export async function generateAuthUrlForUser(
     }
   }
 
-  // 生成新的授权链接
-  const { url, uuid } = await nyaProfilerClient.generateAuthUrl()
+  // 生成新的授权链接，申请 offline_access 以获取 refresh_token
+  const { url, uuid } = await nyaProfilerClient.generateAuthUrl(
+    'openid offline_access'
+  )
 
   // 创建会话
   sessionManager.createSession(userId, uuid, url)
@@ -105,13 +118,18 @@ export async function generateAuthUrlForUser(
 }
 
 /**
- * 等待用户完成授权并获取数据
+ * 等待用户完成授权并将凭据、存档保存到本地
  */
-export async function waitForAuthAndFetchData(
+export async function waitForAuthAndSaveData(
   userId: string,
   config: Config
-): Promise<any> {
-  if (!nyaProfilerClient || !milthmOIDCClient || !sessionManager) {
+): Promise<{ savedAt: number; userInfo: any }> {
+  if (
+    !nyaProfilerClient ||
+    !milthmOIDCClient ||
+    !sessionManager ||
+    !koishiBaseDir
+  ) {
     throw new Error('API 客户端未初始化')
   }
 
@@ -140,27 +158,42 @@ export async function waitForAuthAndFetchData(
 
     logger.info(`成功为用户 ${userId} 获取访问令牌`)
 
+    // 预先保存凭据（包括 refresh_token）
+    const credentials: UserCredentials = {
+      userId,
+      accessToken: tokenResponse.access_token,
+      refreshToken: tokenResponse.refresh_token,
+      expiresAt: Date.now() + (tokenResponse.expires_in || 3600) * 1000,
+      userInfo: null,
+      savedAt: Date.now()
+    }
+
     // 验证 token 是否有效
     const tokenVerification = await milthmOIDCClient.verifyToken(
       tokenResponse.access_token
     )
 
     if (!tokenVerification.isValid) {
-      logger.error(`Token 验证失败`, {
+      logger.error('Token 验证失败', {
         userId,
         error: tokenVerification.error
       })
       throw new Error(`Token 已过期或无效: ${tokenVerification.error}`)
     }
 
-    logger.info(`Token 验证成功`, { userId })
+    logger.info('Token 验证成功', { userId })
 
-    // 获取用户信息（使用验证返回的信息，避免重复请求）
+    // 获取用户信息
     const userInfo =
       tokenVerification.userInfo ||
       (await milthmOIDCClient.getUserInfo(tokenResponse.access_token))
 
     logger.info(`成功获取用户 ${userId} 的信息`)
+
+    // 更新并保存凭据
+    credentials.userInfo = userInfo
+    saveCredentials(koishiBaseDir, credentials)
+    logger.info(`已保存用户 ${userId} 的凭据`)
 
     // 等待5秒以避免JWT时钟偏移问题
     await new Promise((resolve) => setTimeout(resolve, 5000))
@@ -179,23 +212,22 @@ export async function waitForAuthAndFetchData(
       saveDataInfo.fileUrl
     )
 
-    logger.info(`成功下载用户 ${userId} 的存档文件`, {
-      contentLength: saveContent.length,
-      preview: saveContent.substring(0, 500)
+    logger.info(`成功下载用户 ${userId} 的存档文件`)
+
+    // 保存存档数据
+    const savedAt = Date.now()
+    saveRecord(koishiBaseDir, {
+      userId,
+      content: saveContent,
+      userInfo,
+      savedAt
     })
+    logger.info(`已保存用户 ${userId} 的存档`)
 
     // 清理会话
     sessionManager.removeSession(userId)
 
-    return {
-      userInfo,
-      saveData: {
-        fileUrl: saveDataInfo.fileUrl,
-        content: saveContent,
-        rawData: saveDataInfo.rawData
-      },
-      tokenResponse
-    }
+    return { savedAt, userInfo }
   } catch (error) {
     logger.error(`用户 ${userId} 授权流程失败`, { error })
 
@@ -208,6 +240,78 @@ export async function waitForAuthAndFetchData(
 
     throw error
   }
+}
+
+/**
+ * 使用已保存的 refresh_token 更新存档
+ */
+export async function refreshAndUpdateSaveData(
+  userId: string
+): Promise<{ savedAt: number; userInfo: any }> {
+  if (!milthmOIDCClient || !koishiBaseDir) {
+    throw new Error('API 客户端未初始化')
+  }
+
+  const credentials = loadCredentials(koishiBaseDir, userId)
+  if (!credentials?.refreshToken) {
+    throw new Error('没有可用的 refresh_token，请重新授权')
+  }
+
+  logger.info(`使用 refresh_token 为用户 ${userId} 更新存档`)
+
+  // 刷新访问令牌
+  const tokenResponse = await milthmOIDCClient.refreshAccessToken(
+    credentials.refreshToken
+  )
+
+  // 等待 k8s 集群同步新令牌，避免立即请求时出现 TokenExpireError
+  await new Promise((resolve) => setTimeout(resolve, 2000))
+
+  // 更新凭据
+  const updatedCredentials: UserCredentials = {
+    ...credentials,
+    accessToken: tokenResponse.access_token,
+    refreshToken: tokenResponse.refresh_token ?? credentials.refreshToken,
+    expiresAt: Date.now() + (tokenResponse.expires_in || 3600) * 1000,
+    savedAt: Date.now()
+  }
+  saveCredentials(koishiBaseDir, updatedCredentials)
+
+  // 获取存档数据
+  const saveDataInfo = await milthmOIDCClient.getUserSaveData(
+    tokenResponse.access_token
+  )
+  const saveContent = await milthmOIDCClient.downloadSaveFile(
+    saveDataInfo.fileUrl
+  )
+
+  // 保存存档数据
+  const savedAt = Date.now()
+  saveRecord(koishiBaseDir, {
+    userId,
+    content: saveContent,
+    userInfo: credentials.userInfo,
+    savedAt
+  })
+
+  logger.info(`成功更新用户 ${userId} 的存档数据`)
+  return { savedAt, userInfo: credentials.userInfo }
+}
+
+/**
+ * 获取本地存档记录
+ */
+export function getLocalSaveRecord(userId: string): UserSaveRecord | null {
+  if (!koishiBaseDir) return null
+  return loadRecord(koishiBaseDir, userId)
+}
+
+/**
+ * 获取本地保存的用户凭据
+ */
+export function getLocalCredentials(userId: string): UserCredentials | null {
+  if (!koishiBaseDir) return null
+  return loadCredentials(koishiBaseDir, userId)
 }
 
 /**

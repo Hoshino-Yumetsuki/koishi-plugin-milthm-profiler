@@ -13,11 +13,14 @@ export class NyaProfilerClient {
    * 生成授权链接
    * @returns 授权链接和 UUID
    */
-  async generateAuthUrl(): Promise<{
+  async generateAuthUrl(scope?: string): Promise<{
     url: string
     uuid: string
   }> {
-    const url = `${NYA_PROFILER_BASE_URL}/gen?client_id=${encodeURIComponent(this.clientId)}`
+    let url = `${NYA_PROFILER_BASE_URL}/gen?client_id=${encodeURIComponent(this.clientId)}`
+    if (scope) {
+      url += `&scope=${encodeURIComponent(scope)}`
+    }
 
     this.logger.debug(`请求生成授权链接: ${url}`)
 
@@ -54,13 +57,34 @@ export class NyaProfilerClient {
         throw new Error(`生成授权链接失败: ${data.message}`)
       }
 
+      // 在代理返回的 OIDC 授权 URL 中注入额外 scope（如 offline_access），
+      // 因为代理服务本身可能不透传 scope 参数。
+      let authUrl = data.details.url
+      if (scope) {
+        try {
+          const parsed = new URL(authUrl)
+          const existing = parsed.searchParams.get('scope') ?? ''
+          const merged = Array.from(
+            new Set(
+              [...existing.split(' '), ...scope.split(' ')].filter(Boolean)
+            )
+          ).join(' ')
+          parsed.searchParams.set('scope', merged)
+          authUrl = parsed.toString()
+        } catch {
+          this.logger.warn('无法解析授权 URL 以注入 scope，使用原始 URL', {
+            authUrl
+          })
+        }
+      }
+
       this.logger.debug('成功生成授权链接', {
         uuid: data.details.code,
-        url: data.details.url
+        url: authUrl
       })
 
       return {
-        url: data.details.url,
+        url: authUrl,
         uuid: data.details.code
       }
     } catch (error) {
