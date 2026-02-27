@@ -85,3 +85,17 @@ export function loadRecord(
     return null
   }
 }
+
+export function deleteCredentials(baseDir: string, userId: string): boolean {
+  const filePath = getCredentialsPath(baseDir, userId)
+  if (!fs.existsSync(filePath)) return false
+  fs.rmSync(filePath)
+  return true
+}
+
+export function deleteRecord(baseDir: string, userId: string): boolean {
+  const filePath = getSavePath(baseDir, userId)
+  if (!fs.existsSync(filePath)) return false
+  fs.rmSync(filePath)
+  return true
+}

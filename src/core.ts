@@ -9,6 +9,8 @@ import {
   loadCredentials,
   saveRecord,
   loadRecord,
+  deleteCredentials,
+  deleteRecord,
   type UserCredentials,
   type UserSaveRecord
 } from './utils/credentials'
@@ -330,6 +332,33 @@ export function cancelAuthSession(userId: string): boolean {
   }
 
   return false
+}
+
+/**
+ * 登出用户，删除本地保存的凭据和存档数据
+ */
+export function logoutUser(userId: string): {
+  hadCredentials: boolean
+  hadRecord: boolean
+} {
+  if (!koishiBaseDir) {
+    throw new Error('插件未初始化')
+  }
+
+  // 同时取消进行中的授权会话
+  if (sessionManager) {
+    const session = sessionManager.getSession(userId)
+    if (session) {
+      sessionManager.removeSession(userId)
+    }
+  }
+
+  const hadCredentials = deleteCredentials(koishiBaseDir, userId)
+  const hadRecord = deleteRecord(koishiBaseDir, userId)
+
+  logger.info(`用户 ${userId} 已登出`, { hadCredentials, hadRecord })
+
+  return { hadCredentials, hadRecord }
 }
 
 /**

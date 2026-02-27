@@ -7,6 +7,7 @@ import {
   waitForAuthAndSaveData,
   refreshAndUpdateSaveData,
   cancelAuthSession,
+  logoutUser,
   setMainLogger,
   processSaveData,
   generateB20Image,
@@ -92,7 +93,12 @@ export function apply(ctx: Context, config: Config) {
             await session.send('正在使用已保存的授权信息拉取存档...')
             const result = await refreshAndUpdateSaveData(userId)
             const savedDate = new Date(result.savedAt).toLocaleString('zh-CN')
-            return `存档拉取成功！更新时间：${savedDate}`
+            const username =
+              result.userInfo?.preferred_username ||
+              result.userInfo?.name ||
+              result.userInfo?.nickname ||
+              ''
+            return `存档拉取成功！用户：${username}，更新时间：${savedDate}`
           } catch (refreshError) {
             logger.warn('使用 refresh_token 拉取失败，将重新进行授权', {
               error: refreshError
@@ -109,7 +115,12 @@ export function apply(ctx: Context, config: Config) {
 
         const result = await waitForAuthAndSaveData(userId, config)
         const savedDate = new Date(result.savedAt).toLocaleString('zh-CN')
-        return `存档拉取成功！更新时间：${savedDate}`
+        const username =
+          result.userInfo?.preferred_username ||
+          result.userInfo?.name ||
+          result.userInfo?.nickname ||
+          ''
+        return `存档拉取成功！用户：${username}，更新时间：${savedDate}`
       } catch (error) {
         logger.error('拉取存档失败', { error, userId })
         return `拉取存档失败: ${error instanceof Error ? error.message : String(error)}`
@@ -128,6 +139,30 @@ export function apply(ctx: Context, config: Config) {
         return '已取消授权请求'
       } else {
         return '当前没有进行中的授权请求'
+      }
+    })
+
+  // 子命令：登出
+  ctx
+    .command('milthm.logout', '登出并清除本地授权及存档数据')
+    .alias('mlt.logout')
+    .action(({ session }) => {
+      const userId = session.userId
+
+      try {
+        const { hadCredentials, hadRecord } = logoutUser(userId)
+
+        if (!hadCredentials && !hadRecord) {
+          return '当前没有已保存的授权或存档数据'
+        }
+
+        const parts: string[] = []
+        if (hadCredentials) parts.push('授权信息')
+        if (hadRecord) parts.push('本地存档')
+        return `已成功登出，已清除：${parts.join('、')}。如需重新使用，请通过 milthm.update 重新授权。`
+      } catch (error) {
+        logger.error('登出失败', { error, userId })
+        return `登出失败: ${error instanceof Error ? error.message : String(error)}`
       }
     })
 }
