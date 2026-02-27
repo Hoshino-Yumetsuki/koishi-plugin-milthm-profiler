@@ -5,6 +5,8 @@
 """
 
 import shutil
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from PIL import Image
 
@@ -12,6 +14,13 @@ from PIL import Image
 PROJECT_ROOT = Path(__file__).parent
 SOURCE_ROOT = PROJECT_ROOT / "milthm-calculator-web"
 TARGET_ASSETS = PROJECT_ROOT / "assets"
+
+# 线程安全锁（用于 print）
+_print_lock = threading.Lock()
+
+def safe_print(*args, **kwargs):
+    with _print_lock:
+        print(*args, **kwargs)
 
 def convert_image_to_avif(source_path: Path, target_path: Path, quality: int = 85):
     """
@@ -62,24 +71,28 @@ def convert_image_to_avif(source_path: Path, target_path: Path, quality: int = 8
             reduction = (1 - target_size / source_size) * 100 if source_size > 0 else 0
 
             alpha_info = " (with alpha)" if is_png else ""
-            print(f"✓ {source_path.name} -> {target_path.name}{alpha_info}")
-            print(f"  {source_size:.1f}KB -> {target_size:.1f}KB (减少 {reduction:.1f}%)")
+            safe_print(f"✓ {source_path.name} -> {target_path.name}{alpha_info}")
+            safe_print(f"  {source_size:.1f}KB -> {target_size:.1f}KB (减少 {reduction:.1f}%)")
 
     except Exception as e:
-        print(f"✗ 转换失败 {source_path.name}: {e}")
+        safe_print(f"✗ 转换失败 {source_path.name}: {e}")
 
 def copy_file(source_path: Path, target_path: Path):
     """复制文件"""
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_path, target_path)
-        print(f"📄 复制: {source_path.name}")
+        safe_print(f"📄 复制: {source_path.name}")
     except Exception as e:
-        print(f"✗ 复制失败 {source_path.name}: {e}")
+        safe_print(f"✗ 复制失败 {source_path.name}: {e}")
 
 def main():
+    import os
+    max_workers = min(32, (os.cpu_count() or 4) * 2)
+
     print("=" * 60)
-    print("Milthm 资产转换脚本")
+    print("Milthm 资产转换脚本（多线程模式）")
+    print(f"🔧 并发线程数: {max_workers}")
     print("=" * 60)
 
     # 检查源目录是否存在
@@ -95,58 +108,75 @@ def main():
 
     TARGET_ASSETS.mkdir(parents=True, exist_ok=True)
 
-    # 统计信息
-    total_images = 0
-    total_fonts = 0
+    # 收集所有任务
+    image_tasks: list[tuple] = []  # (source, target, quality)
+    copy_tasks:  list[tuple] = []  # (source, target)
 
     # 处理背景图
-    print("\n📂 处理背景图...")
-    print("-" * 60)
     bg_folder = SOURCE_ROOT / "jpgs" / "background"
     if bg_folder.exists():
         bg_target = TARGET_ASSETS / "backgrounds"
         bg_target.mkdir(parents=True, exist_ok=True)
-
         for bg_file in bg_folder.glob("*"):
             if bg_file.suffix.lower() in ['.jpg', '.jpeg', '.png', '.avif']:
                 if bg_file.suffix.lower() == '.avif':
-                    # 直接复制 AVIF
-                    copy_file(bg_file, bg_target / bg_file.name)
+                    copy_tasks.append((bg_file, bg_target / bg_file.name))
                 else:
-                    # 转换其他格式到 AVIF
                     target_path = bg_target / bg_file.with_suffix('.avif').name
-                    convert_image_to_avif(bg_file, target_path)
-                total_images += 1
+                    image_tasks.append((bg_file, target_path, 85))
 
-    # 处理歌曲封面和图标（包括 JPG 封面和 PNG 图标/等级标志）
-    print("\n📂 处理歌曲封面和图标...")
-    print("-" * 60)
+    # 处理歌曲封面和图标
     jpgs_folder = SOURCE_ROOT / "jpgs"
     covers_target = TARGET_ASSETS / "covers"
     covers_target.mkdir(parents=True, exist_ok=True)
-
-    # 只处理主目录的图片文件，排除子目录
     for cover_file in jpgs_folder.glob("*"):
         if cover_file.is_file() and cover_file.suffix.lower() in ['.jpg', '.jpeg', '.png']:
             target_path = covers_target / cover_file.with_suffix('.avif').name
-            # PNG 图标使用更高质量以保留 alpha 通道细节
             q = 90 if cover_file.suffix.lower() == '.png' else 75
-            convert_image_to_avif(cover_file, target_path, quality=q)
-            total_images += 1
-            if total_images % 20 == 0:
-                print(f"  已处理 {total_images} 个文件...")
+            image_tasks.append((cover_file, target_path, q))
 
-    # 复制字体文件
-    print("\n📂 复制字体文件...")
-    print("-" * 60)
+    # 收集字体文件
     fonts_source = SOURCE_ROOT / "fonts"
     if fonts_source.exists():
         for font_file in fonts_source.rglob("*"):
             if font_file.is_file() and font_file.suffix.lower() in ['.ttf', '.otf', '.woff', '.woff2']:
                 relative_path = font_file.relative_to(fonts_source)
                 target_path = TARGET_ASSETS / "fonts" / relative_path
-                copy_file(font_file, target_path)
-                total_fonts += 1
+                copy_tasks.append((font_file, target_path))
+
+    total_images = len(image_tasks)
+    total_fonts  = len(copy_tasks)
+
+    print(f"\n📊 待处理: {total_images} 张图片, {total_fonts} 个字体")
+    print("-" * 60)
+
+    # 并行执行图片转换
+    completed = threading.Event()
+    counter = {"done": 0}
+    counter_lock = threading.Lock()
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # 提交图片转换任务
+        img_futures = {
+            executor.submit(convert_image_to_avif, src, dst, q): src
+            for src, dst, q in image_tasks
+        }
+        # 提交文件复制任务
+        copy_futures = {
+            executor.submit(copy_file, src, dst): src
+            for src, dst in copy_tasks
+        }
+
+        all_futures = {**img_futures, **copy_futures}
+        total = len(all_futures)
+
+        for future in as_completed(all_futures):
+            with counter_lock:
+                counter["done"] += 1
+                done = counter["done"]
+            # 每完成 20 个输出一次进度
+            if done % 20 == 0 or done == total:
+                safe_print(f"  ⏳ 进度: {done}/{total}")
 
     print("\n" + "=" * 60)
     print("转换完成!")
