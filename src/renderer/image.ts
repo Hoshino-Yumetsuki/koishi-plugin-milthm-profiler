@@ -30,6 +30,7 @@ let assetsPath = ''
 let vipsInstance: any = null
 let renderSequence = 0
 let fontCache: Uint8Array[] | null = null
+let coverMapPromise: Promise<Record<string, string>> | null = null
 
 const pngCache = new Map<string, Uint8Array>()
 
@@ -108,8 +109,43 @@ function registerImage(r: Renderer, key: string, data: Uint8Array) {
   r.putPersistentImage({ src: key, data })
 }
 
-function getCoverFileName(songName: string): string {
-  return songName.replace(/[#?><*"|/\\:]/g, '')
+function normalizeCoverFileName(input: string): string {
+  return input
+    .normalize('NFC')
+    .replace(/[<>:"/\\|?*]/g, '_')
+    .replace(/[\u0000-\u001F]/g, '')
+    .replace(/[　\s]+/g, ' ')
+    .replace(/[. ]+$/g, '')
+    .trim()
+}
+
+async function loadCoverMap(): Promise<Record<string, string>> {
+  if (!coverMapPromise) {
+    coverMapPromise = (async () => {
+      try {
+        const mapPath = path.join(
+          assetsPath,
+          'assets',
+          'covers',
+          'cover-map.json'
+        )
+        const mapContent = await fs.readFile(mapPath, 'utf-8')
+        return JSON.parse(mapContent) as Record<string, string>
+      } catch {
+        return {}
+      }
+    })()
+  }
+
+  return coverMapPromise
+}
+
+async function getCoverRelativePath(songName: string): Promise<string> {
+  const coverMap = await loadCoverMap()
+  const mappedFileName = coverMap[songName]
+  const fileName =
+    mappedFileName || `${normalizeCoverFileName(songName) || 'unknown'}.avif`
+  return `covers/${fileName}`
 }
 
 function getLevelIconName(item: ProcessedScore): string {
@@ -365,9 +401,9 @@ export async function generateB20Image(
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
     // 封面
-    const coverFileName = getCoverFileName(item.name)
+    const coverRelativePath = await getCoverRelativePath(item.name)
     const coverKey = `${renderKeyPrefix}_cover_${i}`
-    const coverPng = await loadAvifImage(`covers/${coverFileName}.avif`)
+    const coverPng = await loadAvifImage(coverRelativePath)
     if (coverPng) {
       registerImage(r, coverKey, coverPng)
       coverKeys.push(coverKey)
