@@ -6,4 +6,4 @@
 	url = https://github.com/mkzi-nya/milthm-calculator-web.git
 [submodule "third_party/mhtlim-static-files"]
 	path = third_party/mhtlim-static-files
-	url = https://github.com/4everDimensions/mhtlim-static-files
+	url = https://github.com/Hoshino-Yumetsuki/mhtlim-static-files.git
