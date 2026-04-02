@@ -4,3 +4,6 @@
 [submodule "milthm-calculator-web"]
 	path = third_party/milthm-calculator-web
 	url = https://github.com/mkzi-nya/milthm-calculator-web.git
+[submodule "third_party/mhtlim-static-files"]
+	path = third_party/mhtlim-static-files
+	url = https://github.com/4everDimensions/mhtlim-static-files
