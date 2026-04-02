@@ -7,11 +7,11 @@ declare module 'virtual:milthm-constants' {
     string,
     | (number | string | undefined)[]
     | {
-        constant?: number
-        constantv3?: number
+        constant?: number | string
+        constantv3?: number | string
         category?: string
         name?: string
-        yct?: number
+        yct?: number | string
       }
   >
   export default data

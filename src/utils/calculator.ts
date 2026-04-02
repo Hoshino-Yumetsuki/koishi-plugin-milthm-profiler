@@ -152,7 +152,7 @@ export function calculateAverageRating(ratings: number[]): number {
 
   const best20 = [...ratings].sort((a, b) => b - a).slice(0, 20)
   const sum = best20.reduce((acc, r) => acc + r, 0)
-  return Math.round((sum / 20) * 100000) / 100000
+  return sum / 20
 }
 
 // 从存档 JSON 解析歌曲成绩数据

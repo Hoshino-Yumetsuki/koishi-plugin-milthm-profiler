@@ -72,8 +72,8 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
     // 根据 chart_id 查找定数
     const chartInfo = constantData.get(score.chart_id)
 
-    if (!chartInfo || chartInfo.constantv3 <= 0) {
-      // 跳过特殊谱面或没有定数的谱面
+    if (!chartInfo) {
+      // 跳过没有定数信息的谱面
       continue
     }
 
@@ -172,7 +172,13 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
   // 排序并取 B20
   const allBest = Array.from(bestScores.values())
   const best20 = allBest
-    .sort((a, b) => b.singleRating - a.singleRating)
+    .sort((a, b) => {
+      if (b.singleRating !== a.singleRating) {
+        return b.singleRating - a.singleRating
+      }
+
+      return b.score - a.score
+    })
     .slice(0, 20)
 
   const ratings = best20.map((s) => s.singleRating)

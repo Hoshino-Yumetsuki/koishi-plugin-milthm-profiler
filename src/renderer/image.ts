@@ -261,6 +261,10 @@ function findScore(
   return String(Math.min(Math.ceil(score), 699999)).padStart(7, '0')
 }
 
+function toDisplayNumber(value: number): number {
+  return Number.isFinite(value) ? value : 0
+}
+
 /**
  * 检查 Top20 是否全部满足 V3 条件
  */
@@ -1138,7 +1142,7 @@ function buildCard(
   if (ceilVal !== avg * 100) {
     const target =
       (ceilVal - avg * 100) / 5 + Math.max(item.singleRating, item20Rating)
-    targetScoreText = `>> Goal: ${findScore(item.constantv3, target)}`
+    targetScoreText = `>> Goal: ${findScore(toDisplayNumber(item.constantv3), target)}`
   } else {
     targetScoreText = '>> Goal: No remaining'
   }
@@ -1168,7 +1172,7 @@ function buildCard(
   )
 
   // rating (右对齐, V3 时为蓝色 #9ac9ff)
-  const constText = item.constantv3.toFixed(1)
+  const constText = toDisplayNumber(item.constantv3).toFixed(1)
   const ratingText = `${item.category} ${constText} > ${item.singleRating.toFixed(5)}`
   const ratingColor = highlight ? '#9ac9ff' : 'rgba(255,255,255,0.84)'
   const ratingW = estimateTextW(ratingText, 12)
