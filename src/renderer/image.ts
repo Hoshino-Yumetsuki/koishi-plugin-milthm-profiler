@@ -27,8 +27,9 @@ export interface B20UserInfo {
 
 // 全局状态
 let assetsPath = ''
-let renderer: Renderer | null = null
 let vipsInstance: any = null
+let renderSequence = 0
+let fontCache: Uint8Array[] | null = null
 
 const pngCache = new Map<string, Uint8Array>()
 
@@ -47,20 +48,26 @@ async function initVips() {
 }
 
 async function initRenderer() {
-  if (renderer) return renderer
-  renderer = new Renderer()
-  const fontDirs = [
-    ['Chill Round', 'ChillRoundF v3.0.ttf'],
-    ['alimamafangyuanti', 'AlimamaFangYuanTiVF-Thin.ttf']
-  ]
-  for (const [dir, file] of fontDirs) {
-    try {
-      const fontPath = path.join(assetsPath, 'assets', 'fonts', dir, file)
-      const fontBuffer = await fs.readFile(fontPath)
-      renderer.loadFont(new Uint8Array(fontBuffer))
-    } catch {
-      // font not available
+  if (!fontCache) {
+    fontCache = []
+    const fontDirs = [
+      ['Chill Round', 'ChillRoundF v3.0.ttf'],
+      ['alimamafangyuanti', 'AlimamaFangYuanTiVF-Thin.ttf']
+    ]
+    for (const [dir, file] of fontDirs) {
+      try {
+        const fontPath = path.join(assetsPath, 'assets', 'fonts', dir, file)
+        const fontBuffer = await fs.readFile(fontPath)
+        fontCache.push(new Uint8Array(fontBuffer))
+      } catch {
+        // font not available
+      }
     }
+  }
+
+  const renderer = new Renderer()
+  for (const fontData of fontCache) {
+    renderer.loadFont(fontData)
   }
   return renderer
 }
@@ -300,6 +307,7 @@ export async function generateB20Image(
 ): Promise<Buffer> {
   const r = await initRenderer()
   await initVips()
+  const renderKeyPrefix = `render_${Date.now()}_${++renderSequence}`
 
   const items = result.best20
   const cardCount = items.length
@@ -346,7 +354,8 @@ export async function generateB20Image(
   ]
   const bgFile = bgNames[Math.floor(Math.random() * bgNames.length)]
   const bgPng = await loadAvifImage(`backgrounds/${bgFile}.avif`)
-  if (bgPng) registerImage(r, 'bg', bgPng)
+  const bgKey = `${renderKeyPrefix}_bg`
+  if (bgPng) registerImage(r, bgKey, bgPng)
 
   // ===== 2. 预加载封面和段位图标 =====
   const coverKeys: (string | null)[] = []
@@ -357,7 +366,7 @@ export async function generateB20Image(
     const item = items[i]
     // 封面
     const coverFileName = getCoverFileName(item.name)
-    const coverKey = `cover_${i}`
+    const coverKey = `${renderKeyPrefix}_cover_${i}`
     const coverPng = await loadAvifImage(`covers/${coverFileName}.avif`)
     if (coverPng) {
       registerImage(r, coverKey, coverPng)
@@ -367,7 +376,7 @@ export async function generateB20Image(
     }
     // 段位图标
     const iconName = getLevelIconName(item)
-    const iconKey = `icon_${iconName}`
+    const iconKey = `${renderKeyPrefix}_icon_${iconName}`
     if (!registeredIcons.has(iconKey)) {
       const iconPng = await loadAvifImage(`covers/${iconName}.avif`)
       if (iconPng) {
@@ -385,7 +394,7 @@ export async function generateB20Image(
   if (bgPng) {
     children.push(
       image({
-        src: 'bg',
+        src: bgKey,
         style: {
           position: 'absolute',
           top: 0,
@@ -431,7 +440,7 @@ export async function generateB20Image(
   if (starCount > 0) {
     const starPng = await loadAvifImage(`covers/${starCount}-star.avif`)
     if (starPng) {
-      starImageKey = `star_${starCount}`
+      starImageKey = `${renderKeyPrefix}_star_${starCount}`
       registerImage(r, starImageKey, starPng)
     }
   }
@@ -506,7 +515,7 @@ export async function generateB20Image(
     height: canvasH,
     format: 'png'
   })
-  return Buffer.from(buffer.asUint8Array())
+  return Buffer.from(buffer)
 }
 
 /* ===== 头部构建 ===== */

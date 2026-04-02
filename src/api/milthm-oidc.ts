@@ -377,7 +377,7 @@ export class MilthmOIDCClient {
       }
 
       // 提取 file_url
-      if (!data.data || !data.data.file_url) {
+      if (!data.data?.file_url) {
         this.logger.error('响应中没有找到 file_url', { data })
         throw new Error('响应中没有找到存档文件 URL')
       }
