@@ -60,6 +60,7 @@ export function apply(ctx: Context, config: Config) {
         // 提取用户信息传给图片生成器
         const b20UserInfo = {
           username:
+            saveRecord.userInfo?.nickname ||
             saveRecord.userInfo?.preferred_username ||
             saveRecord.userInfo?.name ||
             '',
