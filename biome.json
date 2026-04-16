@@ -12,7 +12,7 @@
     "includes": [
       "**",
       "!!**/*.lock",
-      "!!**/*milthm-calculator-web"
+      "!!**/*third_party"
     ]
   },
   "formatter": {

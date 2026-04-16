@@ -2,8 +2,7 @@ import { Schema } from 'koishi'
 
 export interface Config {
   nyaProfiler: {
-    clientId: string
-    secret: string
+    apiKey: string
   }
   milthm: {
     clientId: string
@@ -16,13 +15,10 @@ export interface Config {
 
 export const Config: Schema<Config> = Schema.object({
   nyaProfiler: Schema.object({
-    clientId: Schema.string()
-      .required()
-      .description('Nya Profiler 的 client_id'),
-    secret: Schema.string()
+    apiKey: Schema.string()
       .role('secret')
       .required()
-      .description('Nya Profiler 的 secret')
+      .description('Nya Profiler 的 API Key')
   }).description('Nya Profiler API 配置'),
 
   milthm: Schema.object({

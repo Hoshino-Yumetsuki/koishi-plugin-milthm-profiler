@@ -66,8 +66,7 @@ export async function initClients(ctx: Context, config: Config) {
   const clientLogger = ctx.logger('milthm-profiler:client')
 
   nyaProfilerClient = new NyaProfilerClient(
-    config.nyaProfiler.clientId,
-    config.nyaProfiler.secret,
+    config.nyaProfiler.apiKey,
     clientLogger
   )
 
@@ -106,10 +105,8 @@ export async function generateAuthUrlForUser(
     }
   }
 
-  // 生成新的授权链接，申请 offline_access 以获取 refresh_token
-  const { url, uuid } = await nyaProfilerClient.generateAuthUrl(
-    'openid offline_access'
-  )
+  // 生成新的授权链接
+  const { url, uuid } = await nyaProfilerClient.generateAuthUrl()
 
   // 创建会话
   sessionManager.createSession(userId, uuid, url)

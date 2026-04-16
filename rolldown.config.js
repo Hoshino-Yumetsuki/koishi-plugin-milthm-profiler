@@ -32,7 +32,9 @@ function normalizeCoverFileName(input) {
   return input
     .normalize('NFC')
     .replace(/[<>:"/\\|?*]/g, '_')
-    .replace(/[\u0000-\u001F]/g, '')
+    .split('')
+    .filter((char) => char.codePointAt(0) >= 0x20)
+    .join('')
     .replace(/[　\s]+/g, ' ')
     .replace(/[. ]+$/g, '')
     .trim()

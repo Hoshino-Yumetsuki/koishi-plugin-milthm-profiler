@@ -1,26 +1,18 @@
 import type { NyaProfilerGenResponse, NyaProfilerFetchResponse } from '../types'
 
-const NYA_PROFILER_BASE_URL = 'https://api.mhtl.im/external'
+const NYA_PROFILER_BASE_URL = 'https://renya.mhtl.im/api/external'
 
 export class NyaProfilerClient {
   constructor(
-    private clientId: string,
-    private secret: string,
+    private apiKey: string,
     private logger: any
   ) {}
 
   /**
    * 生成授权链接
-   * @returns 授权链接和 UUID
    */
-  async generateAuthUrl(scope?: string): Promise<{
-    url: string
-    uuid: string
-  }> {
-    let url = `${NYA_PROFILER_BASE_URL}/gen?client_id=${encodeURIComponent(this.clientId)}`
-    if (scope) {
-      url += `&scope=${encodeURIComponent(scope)}`
-    }
+  async generateAuthUrl(): Promise<{ url: string; uuid: string }> {
+    const url = `${NYA_PROFILER_BASE_URL}/gen?api_key=${encodeURIComponent(this.apiKey)}`
 
     this.logger.debug(`请求生成授权链接: ${url}`)
 
@@ -43,48 +35,22 @@ export class NyaProfilerClient {
       try {
         data = JSON.parse(responseText)
       } catch {
-        this.logger.debug({
-          status: response.status,
-          body: responseText
-        })
+        this.logger.debug({ status: response.status, body: responseText })
         throw new Error('生成授权链接响应解析失败，请开启 debug 日志查看详情')
       }
 
       if (data.result !== '200') {
-        this.logger.debug({
-          body: responseText
-        })
+        this.logger.debug({ body: responseText })
         throw new Error(`生成授权链接失败: ${data.message}`)
-      }
-
-      // 在代理返回的 OIDC 授权 URL 中注入额外 scope（如 offline_access），
-      // 因为代理服务本身可能不透传 scope 参数。
-      let authUrl = data.details.url
-      if (scope) {
-        try {
-          const parsed = new URL(authUrl)
-          const existing = parsed.searchParams.get('scope') ?? ''
-          const merged = Array.from(
-            new Set(
-              [...existing.split(' '), ...scope.split(' ')].filter(Boolean)
-            )
-          ).join(' ')
-          parsed.searchParams.set('scope', merged)
-          authUrl = parsed.toString()
-        } catch {
-          this.logger.warn('无法解析授权 URL 以注入 scope，使用原始 URL', {
-            authUrl
-          })
-        }
       }
 
       this.logger.debug('成功生成授权链接', {
         uuid: data.details.code,
-        url: authUrl
+        url: data.details.url
       })
 
       return {
-        url: authUrl,
+        url: data.details.url,
         uuid: data.details.code
       }
     } catch (error) {
@@ -94,22 +60,19 @@ export class NyaProfilerClient {
   }
 
   /**
-   * 获取授权信息
-   * @param uuid 授权请求的 UUID
-   * @returns 授权回调 code
+   * 获取授权信息（单次）
    */
   async fetchAuthCode(uuid: string): Promise<string | null> {
     const url =
       `${NYA_PROFILER_BASE_URL}/fetch?` +
-      `client_id=${encodeURIComponent(this.clientId)}&` +
-      `uuid=${encodeURIComponent(uuid)}&` +
-      `secret=${encodeURIComponent(this.secret)}`
+      `api_key=${encodeURIComponent(this.apiKey)}&` +
+      `uuid=${encodeURIComponent(uuid)}`
 
     this.logger.debug(`请求获取授权信息: uuid=${uuid}`)
 
     try {
       const response = await fetch(url, {
-        headers: { Referer: 'https://nya.mhtl.im/' }
+        headers: { Referer: 'https://renya.mhtl.im/' }
       })
       const responseText = await response.text()
 
@@ -126,27 +89,20 @@ export class NyaProfilerClient {
       try {
         data = JSON.parse(responseText)
       } catch {
-        this.logger.debug({
-          status: response.status,
-          body: responseText
-        })
+        this.logger.debug({ status: response.status, body: responseText })
         throw new Error('获取授权信息响应解析失败，请开启 debug 日志查看详情')
       }
 
       if (data.result === '404') {
-        // 找不到目标记录，说明用户还未授权
         return null
       }
 
       if (data.result !== '200') {
-        this.logger.debug({
-          body: responseText
-        })
+        this.logger.debug({ body: responseText })
         throw new Error(`获取授权信息失败: ${data.message}`)
       }
 
       this.logger.debug('成功获取授权 code', { code: data.details.data })
-
       return data.details.data
     } catch (error) {
       this.logger.error('获取授权信息时发生错误', { error })
@@ -156,10 +112,6 @@ export class NyaProfilerClient {
 
   /**
    * 轮询授权信息
-   * @param uuid 授权请求的 UUID
-   * @param timeout 超时时间（秒）
-   * @param interval 轮询间隔（秒）
-   * @returns 授权回调 code
    */
   async pollAuthCode(
     uuid: string,
@@ -177,13 +129,10 @@ export class NyaProfilerClient {
     while (Date.now() - startTime < timeoutMs) {
       try {
         const code = await this.fetchAuthCode(uuid)
-
         if (code) {
           this.logger.info('用户已完成授权')
           return code
         }
-
-        // 等待下一次轮询
         await new Promise((resolve) => setTimeout(resolve, intervalMs))
       } catch (error) {
         this.logger.error('轮询过程中发生错误', { error })
