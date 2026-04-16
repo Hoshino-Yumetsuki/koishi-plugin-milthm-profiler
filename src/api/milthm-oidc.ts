@@ -5,7 +5,7 @@ const TOKEN_ENDPOINT = `${MILTHM_BASE_URL}/oidc/oauth/token`
 const USERINFO_ENDPOINT = `${MILTHM_BASE_URL}/oidc/userinfo`
 const SAVE_DATA_ENDPOINT = `${MILTHM_BASE_URL}/v1/game/save`
 const JWKS_ENDPOINT = `${MILTHM_BASE_URL}/oidc/keys`
-const REDIRECT_URI = 'https://api.mhtl.im/_m/callback'
+const REDIRECT_URI = 'https://renya.mhtl.im/api/oauth/callback'
 
 export class MilthmOIDCClient {
   constructor(
