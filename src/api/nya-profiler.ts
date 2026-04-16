@@ -77,6 +77,10 @@ export class NyaProfilerClient {
       const responseText = await response.text()
 
       if (!response.ok) {
+        // 404 means the session hasn't been created yet — caller should retry
+        if (response.status === 404) {
+          return null
+        }
         this.logger.debug({
           status: response.status,
           headers: Object.fromEntries(response.headers.entries()),
