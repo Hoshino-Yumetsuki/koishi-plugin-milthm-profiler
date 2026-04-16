@@ -1,6 +1,7 @@
 import { type Context, Logger, h } from 'koishi'
 import type Config from './config'
 import { createLogger, setLoggerLevel } from './utils/logger'
+import { MilthmApiError } from './api/milthm-oidc'
 import {
   initClients,
   generateAuthUrlForUser,
@@ -101,6 +102,19 @@ export function apply(ctx: Context, config: Config) {
               ''
             return `存档拉取成功！用户：${username}，更新时间：${savedDate}`
           } catch (refreshError) {
+            if (
+              refreshError instanceof MilthmApiError &&
+              (refreshError.status === 418 ||
+                refreshError.apiCode === 'GameSaveDownloadLimitExceededError')
+            ) {
+              logger.info('用户存档下载次数达到上限，无需重新授权', {
+                userId,
+                status: refreshError.status,
+                code: refreshError.apiCode
+              })
+              return '今日存档下载次数已达上限，请明天再试。'
+            }
+
             logger.warn('使用 refresh_token 拉取失败，将重新进行授权', {
               error: refreshError
             })

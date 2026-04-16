@@ -7,6 +7,28 @@ const SAVE_DATA_ENDPOINT = `${MILTHM_BASE_URL}/v1/game/save`
 const JWKS_ENDPOINT = `${MILTHM_BASE_URL}/oidc/keys`
 const REDIRECT_URI = 'https://renya.mhtl.im/api/oauth/callback'
 
+export class MilthmApiError extends Error {
+  status?: number
+  apiCode?: string
+
+  constructor(
+    message: string,
+    options?: {
+      status?: number
+      apiCode?: string
+      cause?: unknown
+    }
+  ) {
+    super(message)
+    this.name = 'MilthmApiError'
+    this.status = options?.status
+    this.apiCode = options?.apiCode
+    if (options?.cause !== undefined) {
+      ;(this as any).cause = options.cause
+    }
+  }
+}
+
 export class MilthmOIDCClient {
   constructor(
     private clientId: string,
@@ -350,8 +372,13 @@ export class MilthmOIDCClient {
           error: errorData
         })
 
-        throw new Error(
-          `获取存档数据失败: HTTP ${response.status}${errorData.message ? ` ${errorData.message}` : ''}`
+        throw new MilthmApiError(
+          `获取存档数据失败: HTTP ${response.status}${errorData.message ? ` ${errorData.message}` : ''}`,
+          {
+            status: response.status,
+            apiCode: errorData.code,
+            cause: errorData
+          }
         )
       }
 
@@ -373,7 +400,11 @@ export class MilthmOIDCClient {
         })
         this.logger.error('API 返回错误', { error: data })
 
-        throw new Error(`API 错误: ${JSON.stringify(data)}`)
+        throw new MilthmApiError(`API 错误: ${JSON.stringify(data)}`, {
+          status: response.status,
+          apiCode: data.code,
+          cause: data
+        })
       }
 
       // 提取 file_url
