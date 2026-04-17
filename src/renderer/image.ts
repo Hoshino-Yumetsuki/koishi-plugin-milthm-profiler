@@ -30,7 +30,7 @@ let assetsPath = ''
 let vipsInstance: any = null
 let renderSequence = 0
 let fontCache: Uint8Array[] | null = null
-let coverMapPromise: Promise<Record<string, string>> | null = null
+let illustrationMapPromise: Promise<Map<string, string>> | null = null
 
 const pngCache = new Map<string, Uint8Array>()
 
@@ -109,45 +109,102 @@ function registerImage(r: Renderer, key: string, data: Uint8Array) {
   r.putPersistentImage({ src: key, data })
 }
 
-function normalizeCoverFileName(input: string): string {
-  return input
-    .normalize('NFC')
-    .replace(/[<>:"/\\|?*]/g, '_')
-    .split('')
-    .filter((char) => char.codePointAt(0) >= 0x20)
-    .join('')
-    .replace(/[　\s]+/g, ' ')
-    .replace(/[. ]+$/g, '')
-    .trim()
+async function resizeCropPng(
+  pngData: Uint8Array,
+  targetW: number,
+  targetH: number
+): Promise<Uint8Array> {
+  const vips = await initVips()
+  let img: any = null
+  let resized: any = null
+  let cropped: any = null
+  try {
+    img = vips.Image.newFromBuffer(Buffer.from(pngData))
+    const srcW: number = img.width
+    const srcH: number = img.height
+    const scale = Math.max(targetW / srcW, targetH / srcH)
+    const scaledW = Math.round(srcW * scale)
+    const scaledH = Math.round(srcH * scale)
+    resized = img.resize(scale)
+    const cropX = Math.max(0, Math.floor((scaledW - targetW) / 2))
+    const cropY = Math.max(0, Math.floor((scaledH - targetH) / 2))
+    cropped = resized.crop(cropX, cropY, targetW, targetH)
+    const pngBuffer = cropped.writeToBuffer('.png', { compression: 6 })
+    return new Uint8Array(pngBuffer)
+  } finally {
+    for (const obj of [cropped, resized, img]) {
+      if (obj) {
+        try { obj[Symbol.dispose]() } catch {}
+      }
+    }
+  }
 }
 
-async function loadCoverMap(): Promise<Record<string, string>> {
-  if (!coverMapPromise) {
-    coverMapPromise = (async () => {
+// chart_id → illustration filename, built from MilResource/resource/out.json
+async function loadIllustrationMap(): Promise<Map<string, string>> {
+  if (!illustrationMapPromise) {
+    illustrationMapPromise = (async () => {
+      const map = new Map<string, string>()
       try {
-        const mapPath = path.join(
+        const outPath = path.join(
           assetsPath,
-          'assets',
-          'covers',
-          'cover-map.json'
+          'third_party',
+          'MilResource',
+          'resource',
+          'out.json'
         )
-        const mapContent = await fs.readFile(mapPath, 'utf-8')
-        return JSON.parse(mapContent) as Record<string, string>
+        const raw = await fs.readFile(outPath, 'utf-8')
+        const chapters = JSON.parse(raw) as Record<string, { Songs?: any[] }>
+        for (const chapter of Object.values(chapters)) {
+          for (const song of chapter.Songs ?? []) {
+            const uri: string = song.SharingMetaData?.IllustrationUri ?? ''
+            const uriFilename = uri.split('/').pop() ?? ''
+            const decoded = decodeURIComponent(uriFilename)
+            const pngFilename = decoded.replace(/\.milimg$/i, '.png')
+            for (const level of song.Levels ?? []) {
+              const beatmapId: string = level.BeatmapId ?? ''
+              if (beatmapId) map.set(beatmapId, pngFilename)
+            }
+          }
+        }
       } catch {
-        return {}
+        // illustration map unavailable
       }
+      return map
     })()
   }
-
-  return coverMapPromise
+  return illustrationMapPromise
 }
 
-async function getCoverRelativePath(songName: string): Promise<string> {
-  const coverMap = await loadCoverMap()
-  const mappedFileName = coverMap[songName]
-  const fileName =
-    mappedFileName || `${normalizeCoverFileName(songName) || 'unknown'}.avif`
-  return `covers/${fileName}`
+async function loadCoverForChart(
+  chartId: string,
+  targetW: number,
+  targetH: number
+): Promise<Uint8Array | null> {
+  const cacheKey = `cover:${chartId}:${targetW}x${targetH}`
+  const cached = pngCache.get(cacheKey)
+  if (cached) return cached
+
+  const illustrationMap = await loadIllustrationMap()
+  const filename = illustrationMap.get(chartId)
+  if (!filename) return null
+
+  const illustrationDir = path.join(
+    assetsPath,
+    'third_party',
+    'MilResource',
+    'resource',
+    'illustration'
+  )
+  try {
+    const rawBuffer = await fs.readFile(path.join(illustrationDir, filename))
+    const rawData = new Uint8Array(rawBuffer)
+    const resized = await resizeCropPng(rawData, targetW, targetH)
+    if (pngCache.size < 200) pngCache.set(cacheKey, resized)
+    return resized
+  } catch {
+    return null
+  }
 }
 
 function getLevelIconName(item: ProcessedScore): string {
@@ -404,28 +461,48 @@ export async function generateB20Image(
   const iconKeys: (string | null)[] = []
   const registeredIcons = new Set<string>()
 
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i]
-    // 封面
-    const coverRelativePath = await getCoverRelativePath(item.name)
-    const coverKey = `${renderKeyPrefix}_cover_${i}`
-    const coverPng = await loadAvifImage(coverRelativePath)
-    if (coverPng) {
-      registerImage(r, coverKey, coverPng)
-      coverKeys.push(coverKey)
+  const uniqueIconNames = [...new Set(items.map(getLevelIconName))]
+
+  const [coverResults, iconResults] = await Promise.all([
+    Promise.all(
+      items.map((item, i) =>
+        loadCoverForChart(item.chart_id, COVER_W, COVER_H).then((png) => ({
+          i,
+          key: `${renderKeyPrefix}_cover_${i}`,
+          png
+        }))
+      )
+    ),
+    Promise.all(
+      uniqueIconNames.map((iconName) =>
+        loadAvifImage(`covers/${iconName}.avif`).then((png) => ({
+          iconName,
+          png
+        }))
+      )
+    )
+  ])
+
+  for (const { key, png } of coverResults) {
+    if (png) {
+      registerImage(r, key, png)
+      coverKeys.push(key)
     } else {
       coverKeys.push(null)
     }
-    // 段位图标
+  }
+
+  for (const { iconName, png } of iconResults) {
+    const iconKey = `${renderKeyPrefix}_icon_${iconName}`
+    if (png) {
+      registerImage(r, iconKey, png)
+      registeredIcons.add(iconKey)
+    }
+  }
+
+  for (const item of items) {
     const iconName = getLevelIconName(item)
     const iconKey = `${renderKeyPrefix}_icon_${iconName}`
-    if (!registeredIcons.has(iconKey)) {
-      const iconPng = await loadAvifImage(`covers/${iconName}.avif`)
-      if (iconPng) {
-        registerImage(r, iconKey, iconPng)
-        registeredIcons.add(iconKey)
-      }
-    }
     iconKeys.push(registeredIcons.has(iconKey) ? iconKey : null)
   }
 
