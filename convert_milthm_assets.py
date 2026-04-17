@@ -25,7 +25,6 @@ from PIL import Image
 # 项目根目录
 PROJECT_ROOT = Path(__file__).parent
 MIL_RESOURCE_ROOT = PROJECT_ROOT / "third_party" / "MilResource" / "resource"
-FONT_SOURCE_ROOT = PROJECT_ROOT / "third_party" / "milthm-calculator-web"
 TARGET_ASSETS = PROJECT_ROOT / "assets"
 
 # 线程安全锁（用于 print）
@@ -172,12 +171,8 @@ def main():
         print(f"[E] 错误: out.json 不存在: {out_json_path}")
         return
 
-    if not FONT_SOURCE_ROOT.exists():
-        print(f"[E] 错误: 字体源目录不存在: {FONT_SOURCE_ROOT}")
-        return
-
     # 清空目标目录（保留 backgrounds 和 icons，因为它们需要被提交）
-    PRESERVE_DIRS = {'backgrounds', 'icons'}
+    PRESERVE_DIRS = {'backgrounds', 'icons', 'fonts'}
     if TARGET_ASSETS.exists():
         print(f"[D]  清空目标目录: {TARGET_ASSETS}（保留 {', '.join(PRESERVE_DIRS)}）")
         for item in TARGET_ASSETS.iterdir():
@@ -214,19 +209,10 @@ def main():
         webp_filename = Path(png_filename).stem + ".webp"
 
         target_path = covers_target / webp_filename
-        image_tasks.append((source_path, target_path, 85, "WEBP"))
+        image_tasks.append((source_path, target_path, 65, "WEBP"))
         cover_map[title] = webp_filename
 
-    # 收集字体文件
-    fonts_source = FONT_SOURCE_ROOT / "fonts"
-    if fonts_source.exists():
-        for font_file in fonts_source.rglob("*"):
-            if font_file.is_file() and font_file.suffix.lower() in [
-                ".ttf", ".otf", ".woff", ".woff2",
-            ]:
-                relative_path = font_file.relative_to(fonts_source)
-                target_path = TARGET_ASSETS / "fonts" / relative_path
-                copy_tasks.append((font_file, target_path))
+    # 收集字体文件（字体直接提交到 git，无需 convert 脚本处理）
 
     total_images = len(image_tasks)
     total_copies = len(copy_tasks)
