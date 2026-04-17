@@ -9,11 +9,12 @@
  *   .split-title: 3px solid #d1d8ff
  */
 
-import { Renderer } from '@takumi-rs/wasm/node'
+import { Renderer } from '@takumi-rs/wasm'
 import { image, container, text as textNode } from '@takumi-rs/helpers'
 import type { Context } from 'koishi'
 import type { ProcessedScore, B20Result } from '../utils/processor'
 import { loadConstantData } from '../utils/constant-loader'
+import coversData from 'virtual:milthm-covers'
 import Vips from 'wasm-vips'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
@@ -30,7 +31,7 @@ let assetsPath = ''
 let vipsInstance: any = null
 let renderSequence = 0
 let fontCache: Uint8Array[] | null = null
-let coverMapPromise: Promise<Record<string, string>> | null = null
+let illustrationMapPromise: Promise<Map<string, string>> | null = null
 
 const pngCache = new Map<string, Uint8Array>()
 
@@ -66,14 +67,15 @@ async function initRenderer() {
     }
   }
 
-  const renderer = new Renderer()
-  for (const fontData of fontCache) {
-    renderer.loadFont(fontData)
-  }
+  // Pass fonts via constructor so loadDefaultFonts defaults to false,
+  // preventing system fonts from taking priority over our custom fonts.
+  const renderer = new Renderer({
+    fonts: fontCache ?? []
+  })
   return renderer
 }
 
-// AVIF → PNG
+// AVIF → PNG (used for icons/backgrounds only)
 
 async function convertAvifToPng(avifBuffer: Buffer): Promise<Uint8Array> {
   const vips = await initVips()
@@ -109,44 +111,52 @@ function registerImage(r: Renderer, key: string, data: Uint8Array) {
   r.putPersistentImage({ src: key, data })
 }
 
-function normalizeCoverFileName(input: string): string {
-  return input
-    .normalize('NFC')
-    .replace(/[<>:"/\\|?*]/g, '_')
-    .split('')
-    .filter((char) => char.codePointAt(0) >= 0x20)
-    .join('')
-    .replace(/[　\s]+/g, ' ')
-    .replace(/[. ]+$/g, '')
-    .trim()
-}
-
-async function loadCoverMap(): Promise<Record<string, string>> {
-  if (!coverMapPromise) {
-    coverMapPromise = (async () => {
+// song name → webp filename, built from assets/covers/cover-map.json
+async function loadCoverMap(): Promise<Map<string, string>> {
+  if (!illustrationMapPromise) {
+    illustrationMapPromise = (async () => {
+      const map = new Map<string, string>()
       try {
-        const mapPath = path.join(
-          assetsPath,
-          'assets',
-          'covers',
-          'cover-map.json'
-        )
-        const mapContent = await fs.readFile(mapPath, 'utf-8')
-        return JSON.parse(mapContent) as Record<string, string>
+        const mapPath = path.join(assetsPath, 'assets', 'covers', 'cover-map.json')
+        const raw = await fs.readFile(mapPath, 'utf-8')
+        const obj = JSON.parse(raw) as Record<string, string>
+        for (const [title, filename] of Object.entries(obj)) {
+          map.set(title, filename)
+        }
       } catch {
-        return {}
+        // cover map unavailable
       }
+      return map
     })()
   }
-  return coverMapPromise
+  return illustrationMapPromise
 }
 
-async function getCoverRelativePath(songName: string): Promise<string> {
-  const coverMap = await loadCoverMap()
-  const mappedFileName = coverMap[songName]
-  const fileName =
-    mappedFileName || `${normalizeCoverFileName(songName) || 'unknown'}.avif`
-  return `covers/${fileName}`
+async function loadCoverForChart(
+  chartId: string,
+  songName: string
+): Promise<Uint8Array | null> {
+  const cacheKey = `cover:${chartId}`
+  const cached = pngCache.get(cacheKey)
+  if (cached) return cached
+
+  // First try chart_id lookup (virtual:milthm-covers, built from out.json)
+  let filename = coversData[chartId]
+  // Fallback to song name lookup (cover-map.json)
+  if (!filename) {
+    const coverMap = await loadCoverMap()
+    filename = coverMap.get(songName)
+  }
+  if (!filename) return null
+
+  const coverPath = path.join(assetsPath, 'assets', 'covers', filename)
+  try {
+    const data = new Uint8Array(await fs.readFile(coverPath))
+    if (pngCache.size < 200) pngCache.set(cacheKey, data)
+    return data
+  } catch {
+    return null
+  }
 }
 
 function getLevelIconName(item: ProcessedScore): string {
@@ -351,14 +361,17 @@ export async function generateB20Image(
   const renderKeyPrefix = `render_${Date.now()}_${++renderSequence}`
 
   const items = result.best20
+  const extras = result.extras ?? []
   const cardCount = items.length
   const b20Count = Math.min(cardCount, 20)
   const overflowCount = Math.max(0, cardCount - 20)
+  const extrasCount = extras.length
 
   // 网格: 2 列
   const cols = 2
   const b20Rows = Math.ceil(b20Count / cols)
   const overflowRows = Math.ceil(overflowCount / cols)
+  const extrasRows = Math.ceil(extrasCount / cols)
 
   // 头部区域高度
   const headerH = 260
@@ -370,10 +383,14 @@ export async function generateB20Image(
   const overflowH =
     overflowCount > 0 ? SPLIT_H + overflowRows * (CARD_H + GRID_GAP) : 0
 
+  // EXTRAS 区域
+  const extrasH =
+    extrasCount > 0 ? SPLIT_H + extrasRows * (CARD_H + GRID_GAP) : 0
+
   // 底部
   const footerH = 108
 
-  const canvasH = headerH + b20GridH + overflowH + footerH
+  const canvasH = headerH + b20GridH + overflowH + extrasH + footerH
 
   // ===== 1. 加载背景 =====
   const bgNames = [
@@ -401,21 +418,35 @@ export async function generateB20Image(
   // ===== 2. 预加载封面和段位图标 =====
   const coverKeys: (string | null)[] = []
   const iconKeys: (string | null)[] = []
+  const extrasCoverKeys: (string | null)[] = []
+  const extrasIconKeys: (string | null)[] = []
   const registeredIcons = new Set<string>()
 
-  const uniqueIconNames = [...new Set(items.map(getLevelIconName))]
+  const allRenderItems = [...items, ...extras]
+  const uniqueIconNames = [...new Set(allRenderItems.map(getLevelIconName))]
 
-  const [coverResults, iconResults] = await Promise.all([
+  const [coverResults, extrasCoverResults, iconResults] = await Promise.all([
     Promise.all(
-      items.map(async (item, i) => {
-        const coverRelativePath = await getCoverRelativePath(item.name)
-        const png = await loadAvifImage(coverRelativePath)
-        return { i, key: `${renderKeyPrefix}_cover_${i}`, png }
-      })
+      items.map((item, i) =>
+        loadCoverForChart(item.chart_id, item.name).then((png) => ({
+          i,
+          key: `${renderKeyPrefix}_cover_${i}`,
+          png
+        }))
+      )
+    ),
+    Promise.all(
+      extras.map((item, i) =>
+        loadCoverForChart(item.chart_id, item.name).then((png) => ({
+          i,
+          key: `${renderKeyPrefix}_ex_cover_${i}`,
+          png
+        }))
+      )
     ),
     Promise.all(
       uniqueIconNames.map((iconName) =>
-        loadAvifImage(`covers/${iconName}.avif`).then((png) => ({
+        loadAvifImage(`icons/${iconName}.avif`).then((png) => ({
           iconName,
           png
         }))
@@ -432,6 +463,15 @@ export async function generateB20Image(
     }
   }
 
+  for (const { key, png } of extrasCoverResults) {
+    if (png) {
+      registerImage(r, key, png)
+      extrasCoverKeys.push(key)
+    } else {
+      extrasCoverKeys.push(null)
+    }
+  }
+
   for (const { iconName, png } of iconResults) {
     const iconKey = `${renderKeyPrefix}_icon_${iconName}`
     if (png) {
@@ -444,6 +484,12 @@ export async function generateB20Image(
     const iconName = getLevelIconName(item)
     const iconKey = `${renderKeyPrefix}_icon_${iconName}`
     iconKeys.push(registeredIcons.has(iconKey) ? iconKey : null)
+  }
+
+  for (const item of extras) {
+    const iconName = getLevelIconName(item)
+    const iconKey = `${renderKeyPrefix}_icon_${iconName}`
+    extrasIconKeys.push(registeredIcons.has(iconKey) ? iconKey : null)
   }
 
   // ===== 3. 构建布局 =====
@@ -497,7 +543,7 @@ export async function generateB20Image(
   const starCount = calculateStars(result.allScores || items)
   let starImageKey: string | null = null
   if (starCount > 0) {
-    const starPng = await loadAvifImage(`covers/${starCount}-star.avif`)
+    const starPng = await loadAvifImage(`icons/${starCount}-star.avif`)
     if (starPng) {
       starImageKey = `${renderKeyPrefix}_star_${starCount}`
       registerImage(r, starImageKey, starPng)
@@ -550,6 +596,32 @@ export async function generateB20Image(
         iconKeys[i],
         result.averageRating,
         items
+      )
+    }
+  }
+
+  // ===== EXTRAS 分割线 + 卡片 =====
+  if (extrasCount > 0) {
+    const extrasSplitY = gridStartY + b20GridH + overflowH
+    buildExtrasSplit(children, extrasSplitY)
+
+    const extrasGridY = extrasSplitY + SPLIT_H
+    for (let i = 0; i < extrasCount; i++) {
+      const colIdx = i % cols
+      const rowIdx = Math.floor(i / cols)
+      const cardX = GRID_PAD_X + colIdx * (CARD_W + GRID_GAP)
+      const cardY = extrasGridY + rowIdx * (CARD_H + GRID_GAP)
+      buildCard(
+        children,
+        extras[i],
+        i,
+        cardX,
+        cardY,
+        extrasCoverKeys[i],
+        extrasIconKeys[i],
+        result.averageRating,
+        items,
+        'EX #'
       )
     }
   }
@@ -996,7 +1068,8 @@ function buildCard(
   coverKey: string | null,
   iconKey: string | null,
   averageRating: number,
-  allItems: ProcessedScore[]
+  allItems: ProcessedScore[],
+  rankPrefix = '#'
 ) {
   const highlight = isV3Highlight(item)
 
@@ -1073,7 +1146,7 @@ function buildCard(
   const textStartY = cardY + CARD_PAD
 
   // --- 排名号 #N (右上, text-align right) ---
-  const rankStr = `#${index + 1}`
+  const rankStr = `${rankPrefix}${index + 1}`
   const rankColor = highlight
     ? 'rgba(203,190,255,0.93)'
     : 'rgba(221,227,255,0.79)'
@@ -1239,6 +1312,41 @@ function buildOverflowSplit(children: any[], splitY: number) {
         left: GRID_PAD_X + 170,
         top: splitY + 22,
         width: CANVAS_W - GRID_PAD_X * 2 - 170,
+        height: 4,
+        backgroundColor: '#bbc5ff',
+        borderRadius: 2
+      }
+    })
+  )
+}
+
+function buildExtrasSplit(children: any[], splitY: number) {
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: GRID_PAD_X + 20,
+        top: splitY + 10,
+        width: 6,
+        height: 25,
+        backgroundColor: '#d1d8ff',
+        borderRadius: 3
+      }
+    })
+  )
+  children.push(
+    container({
+      style: { position: 'absolute', left: GRID_PAD_X + 34, top: splitY + 10 },
+      children: [textNode('EXTRAS', { fontSize: 22, color: '#d1d8ff' })]
+    })
+  )
+  children.push(
+    container({
+      style: {
+        position: 'absolute',
+        left: GRID_PAD_X + 140,
+        top: splitY + 22,
+        width: CANVAS_W - GRID_PAD_X * 2 - 140,
         height: 4,
         backgroundColor: '#bbc5ff',
         borderRadius: 2

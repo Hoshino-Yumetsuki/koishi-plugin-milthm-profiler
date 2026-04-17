@@ -18,11 +18,15 @@ const config = {
   input: './src/index.ts'
 }
 
-const VIRTUAL_ID = 'virtual:milthm-constants'
-const RESOLVED_ID = `\0${VIRTUAL_ID}`
+const VIRTUAL_CONSTANTS_ID = 'virtual:milthm-constants'
+const RESOLVED_CONSTANTS_ID = `\0${VIRTUAL_CONSTANTS_ID}`
 const UPSTREAM_CONSTANT_JS = resolve(
   './third_party/milthm-calculator-web/js/constant.js'
 )
+
+const VIRTUAL_COVERS_ID = 'virtual:milthm-covers'
+const RESOLVED_COVERS_ID = `\0${VIRTUAL_COVERS_ID}`
+const UPSTREAM_OUT_JSON = resolve('./third_party/MilResource/resource/out.json')
 
 /**
  * 在构建期间执行上游 constant.js，将 constantsData 序列化为 JSON
@@ -31,10 +35,10 @@ const UPSTREAM_CONSTANT_JS = resolve(
 const milthmConstantsPlugin = {
   name: 'milthm-constants',
   resolveId(id) {
-    if (id === VIRTUAL_ID) return RESOLVED_ID
+    if (id === VIRTUAL_CONSTANTS_ID) return RESOLVED_CONSTANTS_ID
   },
   load(id) {
-    if (id !== RESOLVED_ID) return
+    if (id !== RESOLVED_CONSTANTS_ID) return
 
     if (!existsSync(UPSTREAM_CONSTANT_JS)) {
       throw new Error(
@@ -57,6 +61,52 @@ const milthmConstantsPlugin = {
     )
 
     return `export default ${JSON.stringify(data)}`
+  }
+}
+
+/**
+ * 在构建期间解析 out.json，将 BeatmapId → WebP文件名 映射序列化为 JSON
+ * 并作为虚拟 ESM 模块捆绑进产物，运行时直接用 chart_id 查找封面。
+ */
+const milthmCoversPlugin = {
+  name: 'milthm-covers',
+  resolveId(id) {
+    if (id === VIRTUAL_COVERS_ID) return RESOLVED_COVERS_ID
+  },
+  load(id) {
+    if (id !== RESOLVED_COVERS_ID) return
+
+    if (!existsSync(UPSTREAM_OUT_JSON)) {
+      console.warn(
+        `[milthm-covers] 找不到 out.json: ${UPSTREAM_OUT_JSON}，封面映射将为空`
+      )
+      return `export default {}`
+    }
+
+    const chapters = JSON.parse(readFileSync(UPSTREAM_OUT_JSON, 'utf-8'))
+    const coverMap = {}
+
+    for (const chapter of chapters) {
+      for (const song of chapter.Songs ?? []) {
+        const uri = song.SharingMetaData?.IllustrationUri ?? ''
+        if (!uri) continue
+
+        const rawFilename = uri.split('/').pop() ?? ''
+        const decoded = decodeURIComponent(rawFilename)
+        const webpFilename = decoded.replace(/\.milimg$/i, '.webp')
+
+        for (const level of song.Levels ?? []) {
+          const beatmapId = (level.BeatmapId ?? '').trim()
+          if (beatmapId) coverMap[beatmapId] = webpFilename
+        }
+      }
+    }
+
+    console.log(
+      `\u2713 milthm-covers: 已捆绑 ${Object.keys(coverMap).length} 条封面映射`
+    )
+
+    return `export default ${JSON.stringify(coverMap)}`
   }
 }
 
@@ -102,18 +152,18 @@ export default defineConfig([
     ...config,
     output: [{ file: 'lib/index.mjs', format: 'es', minify: true }],
     external: external,
-    plugins: [milthmConstantsPlugin, copyAssetsPlugin]
+    plugins: [milthmConstantsPlugin, milthmCoversPlugin, copyAssetsPlugin]
   },
   {
     ...config,
     output: [{ file: 'lib/index.cjs', format: 'cjs', minify: true }],
     external: external,
-    plugins: [milthmConstantsPlugin]
+    plugins: [milthmConstantsPlugin, milthmCoversPlugin]
   },
   {
     ...config,
     output: [{ dir: 'lib', format: 'es' }],
-    plugins: [milthmConstantsPlugin, dts({ emitDtsOnly: true })],
+    plugins: [milthmConstantsPlugin, milthmCoversPlugin, dts({ emitDtsOnly: true })],
     external: external
   }
 ])

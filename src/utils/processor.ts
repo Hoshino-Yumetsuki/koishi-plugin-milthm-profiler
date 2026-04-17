@@ -42,6 +42,8 @@ export interface ProcessedScore {
 
 export interface B20Result {
   best20: ProcessedScore[]
+  /** Scores with constant < 1e-3 (SP/special charts with no reality value) */
+  extras: ProcessedScore[]
   allScores: ProcessedScore[]
   averageRating: number
   totalScores: number
@@ -57,6 +59,7 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
   if (scores.length === 0) {
     return {
       best20: [],
+      extras: [],
       allScores: [],
       averageRating: 0,
       totalScores: 0
@@ -169,9 +172,9 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
     }
   }
 
-  // 排序并取 B20
+  // 排序并取 B30（b20 + 最多 10 条 overflow）
   const allBest = Array.from(bestScores.values())
-  const best20 = allBest
+  const best30 = allBest
     .sort((a, b) => {
       if (b.singleRating !== a.singleRating) {
         return b.singleRating - a.singleRating
@@ -179,13 +182,17 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
 
       return b.score - a.score
     })
-    .slice(0, 20)
+    .slice(0, 30)
 
-  const ratings = best20.map((s) => s.singleRating)
+  // Extras: constant < 1e-3 的曲目（SP 等无 reality 值的谱面）
+  const extras = allBest.filter((s) => s.constant < 1e-3)
+
+  const ratings = best30.slice(0, 20).map((s) => s.singleRating)
   const averageRating = calculateAverageRating(ratings)
 
   return {
-    best20,
+    best20: best30,
+    extras,
     allScores: allBest,
     averageRating,
     totalScores: allBest.length

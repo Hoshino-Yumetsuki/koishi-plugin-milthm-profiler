@@ -35,6 +35,5 @@ package-lock.json
 
 __pycache__
 
-!assets/backgrounds
 assets/covers
 assets/fonts

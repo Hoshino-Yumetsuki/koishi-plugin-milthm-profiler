@@ -55,7 +55,8 @@ def sanitize_filename(name: str) -> str:
 def parse_out_json(out_json_path: Path) -> dict[str, str]:
     """
     解析 out.json，返回 { song_title: png_filename } 映射。
-    同一首歌的所有难度共享同一张插图，取 SharingMetaData.IllustrationUri。
+    同时收录 SharingMetaData.Title 和所有 Level.MetaData.Title，
+    确保 constant.js 里的任何歌名变体都能找到对应封面。
     """
     with open(out_json_path, encoding="utf-8") as f:
         chapters = json.load(f)
@@ -64,43 +65,68 @@ def parse_out_json(out_json_path: Path) -> dict[str, str]:
 
     for chapter in (chapters if isinstance(chapters, list) else chapters.values()):
         for song in chapter.get("Songs", []):
-            title: str = song.get("SharingMetaData", {}).get("Title", "")
-            uri: str = song.get("SharingMetaData", {}).get("IllustrationUri", "")
-            if not title or not uri:
+            sharing = song.get("SharingMetaData", {})
+            uri: str = sharing.get("IllustrationUri", "")
+            if not uri:
                 continue
 
-            # 从 URI 提取文件名：最后一段 decode 后把 .milimg → .png
             raw_filename = uri.split("/")[-1]
             decoded = unquote(raw_filename)
             png_filename = re.sub(r"\.milimg$", ".png", decoded, flags=re.IGNORECASE)
 
-            if title not in title_to_png:
-                title_to_png[title] = png_filename
+            # 收录 SharingMetaData.Title
+            sharing_title: str = sharing.get("Title", "")
+            if sharing_title and sharing_title not in title_to_png:
+                title_to_png[sharing_title] = png_filename
+
+            # 收录所有 Level.MetaData.Title（可能与 SharingMetaData.Title 不同）
+            for level in song.get("Levels", []):
+                level_title: str = level.get("MetaData", {}).get("Title", "")
+                if level_title and level_title not in title_to_png:
+                    title_to_png[level_title] = png_filename
 
     return title_to_png
 
 
-def convert_image_to_avif(source_path: Path, target_path: Path, quality: int = 85):
-    """转换图片文件到 AVIF 格式，PNG 保留 alpha 通道"""
+def convert_image(source_path: Path, target_path: Path, quality: int = 85, fmt: str = "AVIF"):
+    """
+    转换图片文件到目标格式（AVIF 或 WebP）
+    PNG 文件保留 alpha 通道，JPG 文件转为 RGB
+    """
     try:
         with Image.open(source_path) as img:
             target_path.parent.mkdir(parents=True, exist_ok=True)
 
             is_png = source_path.suffix.lower() == ".png"
 
-            if is_png:
-                if img.mode not in ("RGBA",):
-                    img = img.convert("RGBA")
+            if fmt == "WEBP":
+                # WebP: 保留 alpha（RGBA）或转 RGB
+                if is_png:
+                    if img.mode not in ("RGBA",):
+                        img = img.convert("RGBA")
+                else:
+                    if img.mode in ("RGBA", "LA"):
+                        background = Image.new("RGB", img.size, (255, 255, 255))
+                        mask = img.split()[3] if img.mode == "RGBA" else img.split()[1]
+                        background.paste(img, mask=mask)
+                        img = background
+                    elif img.mode != "RGB":
+                        img = img.convert("RGB")
+                img.save(target_path, "WEBP", quality=quality, method=6)
             else:
-                if img.mode in ("RGBA", "LA"):
-                    background = Image.new("RGB", img.size, (255, 255, 255))
-                    mask = img.split()[3] if img.mode == "RGBA" else img.split()[1]
-                    background.paste(img, mask=mask)
-                    img = background
-                elif img.mode != "RGB":
-                    img = img.convert("RGB")
-
-            img.save(target_path, "AVIF", quality=quality)
+                # AVIF: 用于 icons/backgrounds（小文件，vips 能正常解码）
+                if is_png:
+                    if img.mode not in ("RGBA",):
+                        img = img.convert("RGBA")
+                else:
+                    if img.mode in ("RGBA", "LA"):
+                        background = Image.new("RGB", img.size, (255, 255, 255))
+                        mask = img.split()[3] if img.mode == "RGBA" else img.split()[1]
+                        background.paste(img, mask=mask)
+                        img = background
+                    elif img.mode != "RGB":
+                        img = img.convert("RGB")
+                img.save(target_path, "AVIF", quality=quality, autotiling=False)
 
             source_size = source_path.stat().st_size / 1024
             target_size = target_path.stat().st_size / 1024
@@ -150,11 +176,12 @@ def main():
         print(f"[E] 错误: 字体源目录不存在: {FONT_SOURCE_ROOT}")
         return
 
-    # 清空目标目录（保留 backgrounds，因为它需要被提交）
+    # 清空目标目录（保留 backgrounds 和 icons，因为它们需要被提交）
+    PRESERVE_DIRS = {'backgrounds', 'icons'}
     if TARGET_ASSETS.exists():
-        print(f"[D]  清空目标目录: {TARGET_ASSETS}（保留 backgrounds）")
+        print(f"[D]  清空目标目录: {TARGET_ASSETS}（保留 {', '.join(PRESERVE_DIRS)}）")
         for item in TARGET_ASSETS.iterdir():
-            if item.name == 'backgrounds':
+            if item.name in PRESERVE_DIRS:
                 continue
             if item.is_dir():
                 shutil.rmtree(item)
@@ -168,10 +195,10 @@ def main():
     print(f"  找到 {len(title_to_png)} 首歌曲")
 
     # 收集任务
-    image_tasks: list[tuple] = []   # (source, target, quality)
+    image_tasks: list[tuple] = []   # (source, target, quality, fmt)
     copy_tasks: list[tuple] = []    # (source, target)
 
-    # cover-map.json: { title → avif_filename }
+    # cover-map.json: { title → webp_filename }
     cover_map: dict[str, str] = {}
 
     covers_target = TARGET_ASSETS / "covers"
@@ -183,14 +210,12 @@ def main():
             safe_print(f"[W]  找不到插图: {png_filename} (歌曲: {title})")
             continue
 
-        safe_name = sanitize_filename(title)
-        if not safe_name:
-            safe_name = "unknown"
-        avif_filename = f"{safe_name}.avif"
+        # 用原始 PNG 文件名 stem 作为 WebP 文件名，保持与 MilResource 的映射一致
+        webp_filename = Path(png_filename).stem + ".webp"
 
-        target_path = covers_target / avif_filename
-        image_tasks.append((source_path, target_path, 90))
-        cover_map[title] = avif_filename
+        target_path = covers_target / webp_filename
+        image_tasks.append((source_path, target_path, 85, "WEBP"))
+        cover_map[title] = webp_filename
 
     # 收集字体文件
     fonts_source = FONT_SOURCE_ROOT / "fonts"
@@ -215,8 +240,8 @@ def main():
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         img_futures = {
-            executor.submit(convert_image_to_avif, src, dst, q): src
-            for src, dst, q in image_tasks
+            executor.submit(convert_image, src, dst, q, fmt): src
+            for src, dst, q, fmt in image_tasks
         }
         copy_futures = {
             executor.submit(copy_file, src, dst): src
