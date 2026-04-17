@@ -1257,7 +1257,8 @@ function buildFooter(children: any[], canvasH: number, footerH: number) {
         left: 0,
         top: footerY + 12,
         width: CANVAS_W,
-        textAlign: 'center'
+        display: 'flex',
+        justifyContent: 'center'
       },
       children: [
         textNode(
@@ -1276,7 +1277,8 @@ function buildFooter(children: any[], canvasH: number, footerH: number) {
         left: 0,
         top: footerY + 30,
         width: CANVAS_W,
-        textAlign: 'center'
+        display: 'flex',
+        justifyContent: 'center'
       },
       children: [
         textNode('Theme MilAerno Designed by xzadudu179', {
@@ -1296,7 +1298,8 @@ function buildFooter(children: any[], canvasH: number, footerH: number) {
         left: 0,
         top: footerY + 54,
         width: CANVAS_W,
-        textAlign: 'center'
+        display: 'flex',
+        justifyContent: 'center'
       },
       children: [
         textNode(uaText, { fontSize: 10, color: 'rgba(221,221,221,0.67)' })
@@ -1315,7 +1318,8 @@ function buildFooter(children: any[], canvasH: number, footerH: number) {
         left: 0,
         top: footerY + 72,
         width: CANVAS_W,
-        textAlign: 'center'
+        display: 'flex',
+        justifyContent: 'center'
       },
       children: [
         textNode(updatedText, { fontSize: 10, color: 'rgba(221,221,221,0.67)' })
