@@ -9,7 +9,7 @@
  *   .split-title: 3px solid #d1d8ff
  */
 
-import { Renderer } from '@takumi-rs/wasm'
+import { Renderer, initSync } from '@takumi-rs/wasm'
 import { image, container, text as textNode } from '@takumi-rs/helpers'
 import type { Context } from 'koishi'
 import type { ProcessedScore, B20Result } from '../utils/processor'
@@ -17,7 +17,19 @@ import { loadConstantData } from '../utils/constant-loader'
 import coversData from 'virtual:milthm-covers'
 import Vips from 'wasm-vips'
 import * as fs from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 import * as path from 'node:path'
+import { createRequire } from 'node:module'
+
+;(function ensureWasmInit() {
+  try {
+    const require = createRequire(import.meta.url)
+    const wasmPath = require.resolve('@takumi-rs/wasm/takumi_wasm_bg.wasm')
+    const wasmBytes = readFileSync(wasmPath)
+    initSync({ module: wasmBytes })
+  } catch {
+  }
+})()
 
 // 用户信息接口
 export interface B20UserInfo {
