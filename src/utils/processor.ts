@@ -172,9 +172,9 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
     }
   }
 
-  // 排序并取 B30（b20 + 最多 10 条 overflow）
+  // 排序并取 B22（b20 + 最多 2 条 overflow）
   const allBest = Array.from(bestScores.values())
-  const best30 = allBest
+  const best22 = allBest
     .sort((a, b) => {
       if (b.singleRating !== a.singleRating) {
         return b.singleRating - a.singleRating
@@ -182,16 +182,18 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
 
       return b.score - a.score
     })
-    .slice(0, 30)
+    .slice(0, 22)
 
-  // Extras: constant < 1e-3 的曲目（SP 等无 reality 值的谱面）
-  const extras = allBest.filter((s) => s.constant < 1e-3)
+  // Extras: constant < 1e-3 的曲目（SP 等无 reality 值的谱面），最多 2 条
+  const extras = allBest
+    .filter((s) => s.constant < 1e-3)
+    .slice(0, 2)
 
-  const ratings = best30.slice(0, 20).map((s) => s.singleRating)
+  const ratings = best22.slice(0, 20).map((s) => s.singleRating)
   const averageRating = calculateAverageRating(ratings)
 
   return {
-    best20: best30,
+    best20: best22,
     extras,
     allScores: allBest,
     averageRating,
