@@ -92,7 +92,6 @@ export function apply(ctx: Context, config: Config) {
         const credentials = getLocalCredentials(userId)
         if (credentials?.refreshToken) {
           try {
-            await session.send('正在使用已保存的授权信息拉取存档...')
             const result = await refreshAndUpdateSaveData(userId)
             const savedDate = new Date(result.savedAt).toLocaleString('zh-CN')
             const username =
@@ -118,15 +117,13 @@ export function apply(ctx: Context, config: Config) {
             logger.warn('使用 refresh_token 拉取失败，将重新进行授权', {
               error: refreshError
             })
-            await session.send('已保存的授权信息已失效，需要重新授权...')
           }
         }
 
         // 触发完整 OAuth 授权流程
         const { url } = await generateAuthUrlForUser(userId)
-        await session.send('请在浏览器中打开以下链接完成授权（5分钟内有效）：')
+        await session.send('已保存的授权信息已失效，需要重新授权... 请在浏览器中打开以下链接完成授权（5分钟内有效）：')
         await session.send(url)
-        await session.send('授权完成后将自动拉取存档，请稍候...')
 
         const result = await waitForAuthAndSaveData(userId, config)
         const savedDate = new Date(result.savedAt).toLocaleString('zh-CN')
