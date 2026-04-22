@@ -27,8 +27,7 @@ import { createRequire } from 'node:module'
     const wasmPath = require.resolve('@takumi-rs/wasm/takumi_wasm_bg.wasm')
     const wasmBytes = readFileSync(wasmPath)
     initSync({ module: wasmBytes })
-  } catch {
-  }
+  } catch {}
 })()
 
 // 用户信息接口
@@ -129,7 +128,12 @@ async function loadCoverMap(): Promise<Map<string, string>> {
     illustrationMapPromise = (async () => {
       const map = new Map<string, string>()
       try {
-        const mapPath = path.join(assetsPath, 'assets', 'covers', 'cover-map.json')
+        const mapPath = path.join(
+          assetsPath,
+          'assets',
+          'covers',
+          'cover-map.json'
+        )
         const raw = await fs.readFile(mapPath, 'utf-8')
         const obj = JSON.parse(raw) as Record<string, string>
         for (const [title, filename] of Object.entries(obj)) {
@@ -562,8 +566,28 @@ export async function generateB20Image(
     }
   }
 
+  // ===== 预加载头像 =====
+  const AVATAR_SIZE = 80
+  let avatarImageKey: string | null = null
+  try {
+    const avatarPath = path.join(assetsPath, 'assets', 'icons', 'avatar.webp')
+    const avatarData = new Uint8Array(await fs.readFile(avatarPath))
+    avatarImageKey = `${renderKeyPrefix}_avatar`
+    registerImage(r, avatarImageKey, avatarData)
+  } catch {
+    // avatar not available, skip
+  }
+
   // ===== 头部内容 =====
-  buildHeader(children, result, userInfo, items, starImageKey)
+  buildHeader(
+    children,
+    result,
+    userInfo,
+    items,
+    starImageKey,
+    avatarImageKey,
+    AVATAR_SIZE
+  )
 
   // ===== B20 卡片 =====
   const gridStartY = headerH
@@ -668,7 +692,9 @@ function buildHeader(
   result: B20Result,
   userInfo: B20UserInfo | undefined,
   items: ProcessedScore[],
-  starImageKey: string | null
+  starImageKey: string | null,
+  avatarImageKey: string | null,
+  avatarSize: number
 ) {
   const username = userInfo?.username || userInfo?.nickname || 'UNKNOWN'
   const starCount = calculateStars(result.allScores || items)
@@ -693,10 +719,10 @@ function buildHeader(
     container({
       style: { position: 'absolute', top: infoY, left: HEADER_PAD + 3 },
       children: [
-        textNode(
-          'Generated From: https://github.com/Hoshino-Yumetsuki/koishi-plugin-milthm-profiler',
-          { fontSize: 14, color: '#cfccdb' }
-        )
+        textNode('Generated From: Koishi Plugin Milthm Profiler', {
+          fontSize: 14,
+          color: '#cfccdb'
+        })
       ]
     })
   )
@@ -877,12 +903,17 @@ function buildHeader(
 
   // 右上: 用户名 (.name font-size 1.5em = 24px, text-align right)
   const rightX = CANVAS_W - HEADER_PAD
+  // 头像占位: 头像在最右侧，用户名/Reality 在头像左侧
+  const avatarGap = 12
+  const rightContentX = avatarImageKey
+    ? rightX - avatarSize - avatarGap
+    : rightX
   children.push(
     container({
       style: {
         position: 'absolute',
         top: HEADER_PAD + 5,
-        left: rightX - estimateTextW(username, 24)
+        left: rightContentX - estimateTextW(username, 24)
       },
       children: [textNode(username, { fontSize: 24, color: '#ffffff' })]
     })
@@ -896,7 +927,7 @@ function buildHeader(
   const realityTotalW = realityBadgeW + 13 + realityNumW
 
   // "REALITY" 圆角框 — V3 使用紫色渐变背景，否则白底
-  const badgeLeft = rightX - realityTotalW
+  const badgeLeft = rightContentX - realityTotalW
   if (isRealityV3) {
     // V3 样式: .reality-v3 — 紫色发光背景
     children.push(
@@ -961,7 +992,7 @@ function buildHeader(
     })
   )
 
-  // 星标 (使用对应星级图标)
+  // 星标 (头像下方，与原位置一致，基于 rightX)
   if (starCount > 0 && starImageKey) {
     const starImgW = 80
     children.push(
@@ -977,14 +1008,15 @@ function buildHeader(
     )
   }
 
-  // TOP20 AVG + Date (右侧下方, line-height 1.7em)
+  // TOP20 AVG + Date (基于 rightX，不受头像影响)
   const rightInfoY = realityY + (starCount > 0 ? 60 : 35)
   const avgText = `TOP20 AVG ${result.averageRating.toFixed(5)}`
+  const avgLeft = rightX - estimateTextW(avgText, 15)
   children.push(
     container({
       style: {
         position: 'absolute',
-        left: rightX - estimateTextW(avgText, 15),
+        left: avgLeft,
         top: rightInfoY
       },
       children: [textNode(avgText, { fontSize: 15, color: '#ffffff' })]
@@ -997,12 +1029,35 @@ function buildHeader(
     container({
       style: {
         position: 'absolute',
-        left: rightX - estimateTextW(dateStr, 15),
+        left: avgLeft,
         top: rightInfoY + 26
       },
       children: [textNode(dateStr, { fontSize: 15, color: '#ffffff' })]
     })
   )
+
+  // 头像 (右上角, 圆形裁剪)
+  if (avatarImageKey) {
+    children.push(
+      container({
+        style: {
+          position: 'absolute',
+          left: rightX - avatarSize,
+          top: HEADER_PAD,
+          width: avatarSize,
+          height: avatarSize,
+          borderRadius: avatarSize / 2,
+          overflow: 'hidden'
+        },
+        children: [
+          image({
+            src: avatarImageKey,
+            style: { width: avatarSize, height: avatarSize }
+          })
+        ]
+      })
+    )
+  }
 
   // Tip (底部左侧)
   // const tipY = infoY + 10

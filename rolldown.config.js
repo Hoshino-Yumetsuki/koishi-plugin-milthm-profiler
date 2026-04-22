@@ -6,7 +6,7 @@ import {
   mkdirSync,
   readdirSync,
   existsSync,
-  readFileSync,
+  readFileSync
 } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
 
@@ -163,7 +163,11 @@ export default defineConfig([
   {
     ...config,
     output: [{ dir: 'lib', format: 'es' }],
-    plugins: [milthmConstantsPlugin, milthmCoversPlugin, dts({ emitDtsOnly: true })],
+    plugins: [
+      milthmConstantsPlugin,
+      milthmCoversPlugin,
+      dts({ emitDtsOnly: true })
+    ],
     external: external
   }
 ])

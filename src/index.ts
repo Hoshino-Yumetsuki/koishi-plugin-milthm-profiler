@@ -122,7 +122,9 @@ export function apply(ctx: Context, config: Config) {
 
         // 触发完整 OAuth 授权流程
         const { url } = await generateAuthUrlForUser(userId)
-        const targetUser = session.username ? `${session.username} (${userId})` : userId
+        const targetUser = session.username
+          ? `${session.username} (${userId})`
+          : userId
         await session.send(
           `已保存的授权信息已失效，需要重新授权...\n以下是用户 ${targetUser} 的绑定链接，请在浏览器中打开完成授权（5分钟内有效）：`
         )
