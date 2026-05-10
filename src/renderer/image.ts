@@ -157,7 +157,7 @@ async function loadCoverForChart(
   if (cached) return cached
 
   // First try chart_id lookup (virtual:milthm-covers, built from out.json)
-  let filename = coversData[chartId]
+  let filename: string | undefined = coversData[chartId]
   // Fallback to song name lookup (cover-map.json)
   if (!filename) {
     const coverMap = await loadCoverMap()
