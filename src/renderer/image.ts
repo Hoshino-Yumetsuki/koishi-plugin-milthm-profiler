@@ -578,6 +578,17 @@ export async function generateB20Image(
     // avatar not available, skip
   }
 
+  // ===== 预加载 v3 badge 背景图 =====
+  let v3BadgeImageKey: string | null = null
+  try {
+    const v3BgPath = path.join(assetsPath, 'assets', 'badges', 'v3-bg.webp')
+    const v3BgData = new Uint8Array(await fs.readFile(v3BgPath))
+    v3BadgeImageKey = `${renderKeyPrefix}_v3badge`
+    registerImage(r, v3BadgeImageKey, v3BgData)
+  } catch {
+    // v3-bg.webp not available, fall back to flat color
+  }
+
   // ===== 头部内容 =====
   buildHeader(
     children,
@@ -586,7 +597,8 @@ export async function generateB20Image(
     items,
     starImageKey,
     avatarImageKey,
-    AVATAR_SIZE
+    AVATAR_SIZE,
+    v3BadgeImageKey
   )
 
   // ===== B20 卡片 =====
@@ -694,7 +706,8 @@ function buildHeader(
   items: ProcessedScore[],
   starImageKey: string | null,
   avatarImageKey: string | null,
-  avatarSize: number
+  avatarSize: number,
+  v3BadgeImageKey: string | null
 ) {
   const username = userInfo?.username || userInfo?.nickname || 'UNKNOWN'
   const starCount = calculateStars(result.allScores || items)
@@ -923,13 +936,15 @@ function buildHeader(
   const realityY = HEADER_PAD + 40
   const realityVal = result.averageRating.toFixed(2)
   const realityNumW = estimateTextW(realityVal, 21)
-  const realityBadgeW = 75
+  const BADGE_FONT_SIZE = 14
+  const BADGE_H = 26
+  const realityBadgeW = Math.ceil(estimateTextW('REALITY', BADGE_FONT_SIZE)) + 20
   const realityTotalW = realityBadgeW + 13 + realityNumW
 
-  // "REALITY" 圆角框 — V3 使用紫色渐变背景，否则白底
+  // "REALITY" 圆角框 — V3 使用 v3-bg.webp 背景图，否则白底
   const badgeLeft = rightContentX - realityTotalW
-  if (isRealityV3) {
-    // V3 样式: .reality-v3 — 紫色发光背景
+  if (isRealityV3 && v3BadgeImageKey) {
+    // V3 样式: v3-bg.webp 背景图
     children.push(
       container({
         style: {
@@ -937,9 +952,40 @@ function buildHeader(
           left: badgeLeft,
           top: realityY,
           width: realityBadgeW,
-          height: 23,
+          height: BADGE_H,
+          borderRadius: 999,
+          overflow: 'hidden'
+        },
+        children: [
+          image({
+            src: v3BadgeImageKey,
+            style: { width: realityBadgeW, height: BADGE_H }
+          })
+        ]
+      })
+    )
+    children.push(
+      container({
+        style: {
+          position: 'absolute',
+          left: badgeLeft + 10,
+          top: realityY + Math.floor((BADGE_H - BADGE_FONT_SIZE) / 2) - 1
+        },
+        children: [textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#ffffff' })]
+      })
+    )
+  } else if (isRealityV3) {
+    // V3 fallback: 紫色背景（图片未加载时）
+    children.push(
+      container({
+        style: {
+          position: 'absolute',
+          left: badgeLeft,
+          top: realityY,
+          width: realityBadgeW,
+          height: BADGE_H,
           backgroundColor: '#5B3FD9',
-          borderRadius: 12
+          borderRadius: 999
         }
       })
     )
@@ -948,9 +994,9 @@ function buildHeader(
         style: {
           position: 'absolute',
           left: badgeLeft + 10,
-          top: realityY + 4
+          top: realityY + Math.floor((BADGE_H - BADGE_FONT_SIZE) / 2) - 1
         },
-        children: [textNode('REALITY', { fontSize: 12, color: '#ffffff' })]
+        children: [textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#ffffff' })]
       })
     )
   } else {
@@ -962,9 +1008,9 @@ function buildHeader(
           left: badgeLeft,
           top: realityY,
           width: realityBadgeW,
-          height: 23,
+          height: BADGE_H,
           backgroundColor: '#ffffff',
-          borderRadius: 12
+          borderRadius: 999
         }
       })
     )
@@ -973,9 +1019,9 @@ function buildHeader(
         style: {
           position: 'absolute',
           left: badgeLeft + 10,
-          top: realityY + 4
+          top: realityY + Math.floor((BADGE_H - BADGE_FONT_SIZE) / 2) - 1
         },
-        children: [textNode('REALITY', { fontSize: 12, color: '#000000' })]
+        children: [textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#000000' })]
       })
     )
   }
