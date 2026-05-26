@@ -36,8 +36,8 @@ export function apply(ctx: Context, config: Config) {
     .command('milthm', 'Milthm 查分器')
     .alias('mlt')
     .action(async ({ session }) => {
-      if (!session) return
-      const userId = session.userId!
+      if (!session?.userId) return
+      const userId = session.userId
 
       try {
         // 检查是否已绑定
@@ -88,15 +88,18 @@ export function apply(ctx: Context, config: Config) {
     .command('milthm.update', '拉取最新数据（消耗每日下载次数）')
     .alias('mlt.update')
     .action(async ({ session }) => {
-      if (!session) return
-      const userId = session.userId!
+      if (!session?.userId) return
+      const userId = session.userId
 
       try {
         // 检查是否已绑定
         const binding = getLocalBinding(userId)
         if (binding) {
           // 已绑定，直接查询最新数据
-          logger.info('拉取最新数据', { userId, username: binding.milthmUsername })
+          logger.info('拉取最新数据', {
+            userId,
+            username: binding.milthmUsername
+          })
           const response = await queryUserData(userId)
 
           // 需要重新授权
@@ -169,8 +172,8 @@ export function apply(ctx: Context, config: Config) {
     .command('milthm.cancel', '取消当前的授权请求')
     .alias('mlt.cancel')
     .action(({ session }) => {
-      if (!session) return
-      const userId = session.userId!
+      if (!session?.userId) return
+      const userId = session.userId
       const cancelled = cancelAuthSession(userId)
 
       if (cancelled) {
@@ -185,8 +188,8 @@ export function apply(ctx: Context, config: Config) {
     .command('milthm.logout', '登出并清除本地绑定数据')
     .alias('mlt.logout')
     .action(({ session }) => {
-      if (!session) return
-      const userId = session.userId!
+      if (!session?.userId) return
+      const userId = session.userId
 
       try {
         const { hadBinding } = logoutUser(userId)
