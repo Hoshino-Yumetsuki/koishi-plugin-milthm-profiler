@@ -73,8 +73,7 @@ export class NyaProfilerClient {
     uuid: string
   ): Promise<{ status: string; username?: string }> {
     const url =
-      `${NYA_PROFILER_BASE_URL}/poll?` +
-      `uuid=${encodeURIComponent(uuid)}`
+      `${NYA_PROFILER_BASE_URL}/poll?` + `uuid=${encodeURIComponent(uuid)}`
 
     this.logger.debug(`轮询授权状态: uuid=${uuid}`)
 
@@ -185,10 +184,19 @@ export class NyaProfilerClient {
       }
 
       // 401 with needAuth means token expired, need re-authorization
+      // 404 means user has no authorization record for this app
       if (!response.ok) {
         if (response.status === 401 && data.details?.needAuth) {
           this.logger.warn('用户令牌已过期，需要重新授权', { username })
           return data
+        }
+        if (response.status === 404) {
+          this.logger.warn('用户未授权，需要引导授权', { username })
+          return {
+            result: '404',
+            message: data.message,
+            details: { needAuth: true }
+          } as NyaProfilerQueryResponse
         }
         throw new Error(`查询用户数据失败: ${data.message}`)
       }
