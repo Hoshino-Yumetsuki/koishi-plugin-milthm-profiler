@@ -16,13 +16,16 @@ export class NyaProfilerClient {
    * 生成授权链接
    */
   async generateAuthUrl(): Promise<{ url: string; uuid: string }> {
-    const url = `${NYA_PROFILER_BASE_URL}/gen?api_key=${encodeURIComponent(this.apiKey)}`
+    const url = `${NYA_PROFILER_BASE_URL}/gen`
 
-    this.logger.debug(`请求生成授权链接: ${url}`)
+    this.logger.debug('请求生成授权链接')
 
     try {
       const response = await fetch(url, {
-        headers: { Referer: 'https://nya.mhtl.im/' }
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          Referer: 'https://nya.mhtl.im/'
+        }
       })
       const responseText = await response.text()
 
@@ -71,14 +74,16 @@ export class NyaProfilerClient {
   ): Promise<{ status: string; username?: string }> {
     const url =
       `${NYA_PROFILER_BASE_URL}/poll?` +
-      `api_key=${encodeURIComponent(this.apiKey)}&` +
       `uuid=${encodeURIComponent(uuid)}`
 
     this.logger.debug(`轮询授权状态: uuid=${uuid}`)
 
     try {
       const response = await fetch(url, {
-        headers: { Referer: 'https://renya.mhtl.im/' }
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          Referer: 'https://renya.mhtl.im/'
+        }
       })
       const responseText = await response.text()
 
@@ -158,14 +163,16 @@ export class NyaProfilerClient {
   async queryUserData(username: string): Promise<NyaProfilerQueryResponse> {
     const url =
       `${NYA_PROFILER_BASE_URL}/query?` +
-      `api_key=${encodeURIComponent(this.apiKey)}&` +
       `username=${encodeURIComponent(username)}`
 
     this.logger.debug(`查询用户数据: username=${username}`)
 
     try {
       const response = await fetch(url, {
-        headers: { Referer: 'https://renya.mhtl.im/' }
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          Referer: 'https://renya.mhtl.im/'
+        }
       })
       const responseText = await response.text()
 
