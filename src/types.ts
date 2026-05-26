@@ -17,6 +17,20 @@ export interface NyaProfilerPollResponse {
   }
 }
 
+export interface ChartProgressEntry {
+  all: number
+  ap: number
+  fc: number
+  cl: number
+}
+
+export interface ChartProgress {
+  CL: ChartProgressEntry
+  CB: ChartProgressEntry
+  SK: ChartProgressEntry
+  DZ: ChartProgressEntry
+}
+
 export interface NyaProfilerQueryResponse {
   result: string
   message: string
@@ -24,9 +38,10 @@ export interface NyaProfilerQueryResponse {
     username: string
     best20: ProcessedScore[]
     extras: ProcessedScore[]
-    allScores: ProcessedScore[]
     averageRating: number
     totalScores: number
+    starCount: number
+    chartProgress: ChartProgress
     /** Present when token expired and re-auth is needed */
     needAuth?: boolean
     url?: string

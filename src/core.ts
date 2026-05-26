@@ -3,7 +3,11 @@ import type Config from './config'
 import { NyaProfilerClient } from './api/nya-profiler'
 import { SessionManager } from './utils/session'
 import { setB20AssetsPath } from './renderer/image'
-import type { NyaProfilerQueryResponse, ProcessedScore } from './types'
+import type {
+  NyaProfilerQueryResponse,
+  ProcessedScore,
+  ChartProgress
+} from './types'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -68,9 +72,10 @@ export interface CachedQueryResult {
   milthmUsername: string
   best20: ProcessedScore[]
   extras: ProcessedScore[]
-  allScores: ProcessedScore[]
   averageRating: number
   totalScores: number
+  starCount: number
+  chartProgress: ChartProgress
   /** 缓存时间戳（毫秒） */
   cachedAt: number
 }
@@ -270,9 +275,10 @@ export async function queryUserData(
       milthmUsername: binding.milthmUsername,
       best20: response.details.best20,
       extras: response.details.extras,
-      allScores: response.details.allScores,
       averageRating: response.details.averageRating,
       totalScores: response.details.totalScores,
+      starCount: response.details.starCount,
+      chartProgress: response.details.chartProgress,
       cachedAt: Date.now()
     })
     logger.info(`已缓存用户 ${userId} 的查询结果`)

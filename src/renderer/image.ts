@@ -556,7 +556,8 @@ export async function generateB20Image(
   )
 
   // ===== 预加载星标图片 =====
-  const starCount = calculateStars(result.allScores || items)
+  const starCount =
+    result.starCount ?? calculateStars(result.allScores || items)
   let starImageKey: string | null = null
   if (starCount > 0) {
     const starPng = await loadAvifImage(`icons/${starCount}-star.avif`)
@@ -710,11 +711,13 @@ function buildHeader(
   v3BadgeImageKey: string | null
 ) {
   const username = userInfo?.username || userInfo?.nickname || 'UNKNOWN'
-  const starCount = calculateStars(result.allScores || items)
+  const starCount =
+    result.starCount ?? calculateStars(result.allScores || items)
   const isRealityV3 = checkTop20V3Condition(items)
 
-  // 计算 Chart Progress (使用所有成绩而不仅是 best20)
-  const progress = calculateChartProgress(result.allScores || items)
+  // 计算 Chart Progress
+  const progress =
+    result.chartProgress ?? calculateChartProgress(result.allScores || items)
 
   // 左上: 标题 h1 (2.5em ≈ 40px)
   children.push(

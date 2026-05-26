@@ -67,9 +67,11 @@ export function apply(ctx: Context, config: Config) {
         const b20Result = {
           best20: cached.best20,
           extras: cached.extras,
-          allScores: cached.allScores,
+          allScores: [] as any[],
           averageRating: cached.averageRating,
-          totalScores: cached.totalScores
+          totalScores: cached.totalScores,
+          starCount: cached.starCount,
+          chartProgress: cached.chartProgress
         }
 
         const imageBuffer = await generateB20Image(null, b20Result, b20UserInfo)
@@ -228,9 +230,11 @@ async function renderAndSend(
   const b20Result = {
     best20,
     extras: response.details.extras || [],
-    allScores: response.details.allScores || best20,
+    allScores: [] as any[],
     averageRating,
-    totalScores: response.details.totalScores || best20.length
+    totalScores: response.details.totalScores || best20.length,
+    starCount: response.details.starCount,
+    chartProgress: response.details.chartProgress
   }
 
   const imageBuffer = await generateB20Image(null, b20Result, b20UserInfo)

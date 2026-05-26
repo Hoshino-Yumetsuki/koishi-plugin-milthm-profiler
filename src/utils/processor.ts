@@ -47,6 +47,10 @@ export interface B20Result {
   allScores: ProcessedScore[]
   averageRating: number
   totalScores: number
+  /** Pre-computed star count (from server) — if present, renderer skips local calculation */
+  starCount?: number
+  /** Pre-computed chart progress (from server) — if present, renderer skips local calculation */
+  chartProgress?: import('../types').ChartProgress
 }
 
 /**
