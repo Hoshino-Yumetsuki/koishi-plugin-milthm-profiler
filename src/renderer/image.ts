@@ -368,7 +368,7 @@ export interface ChartProgress {
 }
 
 export async function generateB20Image(
-  _ctx: Context,
+  _ctx: Context | null,
   result: B20Result,
   userInfo?: B20UserInfo
 ): Promise<Buffer> {
@@ -938,7 +938,8 @@ function buildHeader(
   const realityNumW = estimateTextW(realityVal, 21)
   const BADGE_FONT_SIZE = 14
   const BADGE_H = 26
-  const realityBadgeW = Math.ceil(estimateTextW('REALITY', BADGE_FONT_SIZE)) + 20
+  const realityBadgeW =
+    Math.ceil(estimateTextW('REALITY', BADGE_FONT_SIZE)) + 20
   const realityTotalW = realityBadgeW + 13 + realityNumW
 
   // "REALITY" 圆角框 — V3 使用 v3-bg.webp 背景图，否则白底
@@ -971,7 +972,9 @@ function buildHeader(
           left: badgeLeft + 10,
           top: realityY + Math.floor((BADGE_H - BADGE_FONT_SIZE) / 2) - 1
         },
-        children: [textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#ffffff' })]
+        children: [
+          textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#ffffff' })
+        ]
       })
     )
   } else if (isRealityV3) {
@@ -996,7 +999,9 @@ function buildHeader(
           left: badgeLeft + 10,
           top: realityY + Math.floor((BADGE_H - BADGE_FONT_SIZE) / 2) - 1
         },
-        children: [textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#ffffff' })]
+        children: [
+          textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#ffffff' })
+        ]
       })
     )
   } else {
@@ -1021,7 +1026,9 @@ function buildHeader(
           left: badgeLeft + 10,
           top: realityY + Math.floor((BADGE_H - BADGE_FONT_SIZE) / 2) - 1
         },
-        children: [textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#000000' })]
+        children: [
+          textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#000000' })
+        ]
       })
     )
   }

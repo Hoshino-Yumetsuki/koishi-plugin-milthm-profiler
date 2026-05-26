@@ -4,10 +4,6 @@ export interface Config {
   nyaProfiler: {
     apiKey: string
   }
-  milthm: {
-    clientId: string
-    secret: string
-  }
   pollTimeout: number
   pollInterval: number
   isLog: boolean
@@ -20,14 +16,6 @@ export const Config: Schema<Config> = Schema.object({
       .required()
       .description('Nya Profiler 的 API Key')
   }).description('Nya Profiler API 配置'),
-
-  milthm: Schema.object({
-    clientId: Schema.string().required().description('Milthm API 的 client_id'),
-    secret: Schema.string()
-      .role('secret')
-      .required()
-      .description('Milthm API 的 client_secret')
-  }).description('Milthm API 配置'),
 
   pollTimeout: Schema.number()
     .default(300)

@@ -4,26 +4,56 @@ export interface NyaProfilerGenResponse {
   message: string
   details: {
     url: string
-    code: string
-    client_id: string
+    uuid: string
   }
 }
 
-export interface NyaProfilerFetchResponse {
+export interface NyaProfilerPollResponse {
   result: string
   message: string
   details: {
-    data: string
+    status: 'pending' | 'pending_consent' | 'authorized' | 'rejected'
+    username?: string
   }
 }
 
-// Milthm OIDC 令牌响应类型
-export interface OIDCTokenResponse {
-  access_token: string
-  token_type: string
-  expires_in: number
-  refresh_token?: string
-  scope?: string
+export interface NyaProfilerQueryResponse {
+  result: string
+  message: string
+  details: {
+    username: string
+    best20: ProcessedScore[]
+    extras: ProcessedScore[]
+    averageRating: number
+    totalScores: number
+    /** Present when token expired and re-auth is needed */
+    needAuth?: boolean
+    url?: string
+    uuid?: string
+  }
+}
+
+export interface ProcessedScore {
+  chart_id: string
+  name: string
+  difficulty: string
+  category: string
+  constant: number
+  constantv3: number
+  score: number
+  accuracy: number
+  perfect_count: number
+  good_count: number
+  bad_count: number
+  miss_count: number
+  played_at: string
+  singleRating: number
+  rank: string
+  isFC: boolean
+  isAP: boolean
+  isV3: boolean
+  bestLevel: number
+  achievedStatus: number[]
 }
 
 // 授权会话类型
@@ -33,9 +63,4 @@ export interface AuthSession {
   url: string
   timestamp: number
   status: 'pending' | 'authorized' | 'failed' | 'timeout'
-}
-
-// Milthm 用户数据类型（根据实际 API 调整）
-export interface MilthmUserData {
-  [key: string]: any
 }

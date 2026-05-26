@@ -1,19 +1,11 @@
 import type { Context, Logger } from 'koishi'
 import type Config from './config'
 import { NyaProfilerClient } from './api/nya-profiler'
-import { MilthmOIDCClient } from './api/milthm-oidc'
 import { SessionManager } from './utils/session'
 import { setB20AssetsPath } from './renderer/image'
-import {
-  saveCredentials,
-  loadCredentials,
-  saveRecord,
-  loadRecord,
-  deleteCredentials,
-  deleteRecord,
-  type UserCredentials,
-  type UserSaveRecord
-} from './utils/credentials'
+import type { NyaProfilerQueryResponse, ProcessedScore } from './types'
+import fs from 'node:fs'
+import path from 'node:path'
 
 let mainLogger: Logger | null = null
 
@@ -54,9 +46,97 @@ export function setMainLogger(newLogger: Logger) {
 
 // 全局实例
 let nyaProfilerClient: NyaProfilerClient | null = null
-let milthmOIDCClient: MilthmOIDCClient | null = null
 let sessionManager: SessionManager | null = null
 let koishiBaseDir: string | null = null
+
+const PLUGIN_NAME = 'milthm-profiler'
+
+/**
+ * 用户绑定记录：聊天平台 userId → milkloud username
+ */
+interface UserBinding {
+  userId: string
+  milthmUsername: string
+  boundAt: number
+}
+
+/**
+ * 本地缓存的查询结果（避免重复消耗 milkloud 每日下载次数）
+ */
+export interface CachedQueryResult {
+  userId: string
+  milthmUsername: string
+  best20: ProcessedScore[]
+  extras: ProcessedScore[]
+  averageRating: number
+  totalScores: number
+  /** 缓存时间戳（毫秒） */
+  cachedAt: number
+}
+
+function getBindingsPath(baseDir: string, userId: string): string {
+  return path.join(baseDir, 'data', PLUGIN_NAME, 'bindings', `${userId}.json`)
+}
+
+function getCachePath(baseDir: string, userId: string): string {
+  return path.join(baseDir, 'data', PLUGIN_NAME, 'cache', `${userId}.json`)
+}
+
+function ensureDir(filePath: string): void {
+  const dir = path.dirname(filePath)
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true })
+  }
+}
+
+function saveBinding(baseDir: string, binding: UserBinding): void {
+  const filePath = getBindingsPath(baseDir, binding.userId)
+  ensureDir(filePath)
+  fs.writeFileSync(filePath, JSON.stringify(binding, null, 2), 'utf-8')
+}
+
+function loadBinding(baseDir: string, userId: string): UserBinding | null {
+  const filePath = getBindingsPath(baseDir, userId)
+  if (!fs.existsSync(filePath)) return null
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as UserBinding
+  } catch {
+    return null
+  }
+}
+
+function deleteBinding(baseDir: string, userId: string): boolean {
+  const filePath = getBindingsPath(baseDir, userId)
+  if (!fs.existsSync(filePath)) return false
+  fs.rmSync(filePath)
+  return true
+}
+
+function saveCachedResult(baseDir: string, result: CachedQueryResult): void {
+  const filePath = getCachePath(baseDir, result.userId)
+  ensureDir(filePath)
+  fs.writeFileSync(filePath, JSON.stringify(result, null, 2), 'utf-8')
+}
+
+function loadCachedResult(
+  baseDir: string,
+  userId: string
+): CachedQueryResult | null {
+  const filePath = getCachePath(baseDir, userId)
+  if (!fs.existsSync(filePath)) return null
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as CachedQueryResult
+  } catch {
+    return null
+  }
+}
+
+function deleteCachedResult(baseDir: string, userId: string): boolean {
+  const filePath = getCachePath(baseDir, userId)
+  if (!fs.existsSync(filePath)) return false
+  fs.rmSync(filePath)
+  return true
+}
 
 export async function initClients(ctx: Context, config: Config) {
   logger.info('初始化 API 客户端')
@@ -70,12 +150,6 @@ export async function initClients(ctx: Context, config: Config) {
     clientLogger
   )
 
-  milthmOIDCClient = new MilthmOIDCClient(
-    config.milthm.clientId,
-    config.milthm.secret,
-    clientLogger
-  )
-
   sessionManager = new SessionManager()
 
   // 初始化图片渲染器
@@ -84,6 +158,9 @@ export async function initClients(ctx: Context, config: Config) {
   logger.info('API 客户端初始化完成')
 }
 
+/**
+ * 生成授权链接
+ */
 export async function generateAuthUrlForUser(
   userId: string
 ): Promise<{ url: string; uuid: string }> {
@@ -117,18 +194,13 @@ export async function generateAuthUrlForUser(
 }
 
 /**
- * 等待用户完成授权并将凭据、存档保存到本地
+ * 等待用户完成授权并保存绑定关系
  */
-export async function waitForAuthAndSaveData(
+export async function waitForAuthAndBind(
   userId: string,
   config: Config
-): Promise<{ savedAt: number; userInfo: any }> {
-  if (
-    !nyaProfilerClient ||
-    !milthmOIDCClient ||
-    !sessionManager ||
-    !koishiBaseDir
-  ) {
+): Promise<{ username: string }> {
+  if (!nyaProfilerClient || !sessionManager || !koishiBaseDir) {
     throw new Error('API 客户端未初始化')
   }
 
@@ -140,98 +212,30 @@ export async function waitForAuthAndSaveData(
   logger.info(`开始等待用户 ${userId} 完成授权`)
 
   try {
-    // 轮询获取授权码
-    const authCode = await nyaProfilerClient.pollAuthCode(
+    // 轮询等待授权完成
+    const { username } = await nyaProfilerClient.waitForAuth(
       session.uuid,
       config.pollTimeout,
       config.pollInterval
     )
 
-    logger.info(`用户 ${userId} 已完成授权，获取到 auth code`)
+    logger.info(`用户 ${userId} 已完成授权`, { milthmUsername: username })
 
-    // 更新会话状态
-    sessionManager.updateSessionStatus(userId, 'authorized')
-
-    // 使用授权码换取访问令牌
-    const tokenResponse = await milthmOIDCClient.exchangeToken(authCode)
-
-    logger.info(`成功为用户 ${userId} 获取访问令牌`)
-
-    // 预先保存凭据（包括 refresh_token）
-    const credentials: UserCredentials = {
+    // 保存绑定关系
+    saveBinding(koishiBaseDir, {
       userId,
-      accessToken: tokenResponse.access_token,
-      refreshToken: tokenResponse.refresh_token,
-      expiresAt: Date.now() + (tokenResponse.expires_in || 3600) * 1000,
-      userInfo: null,
-      savedAt: Date.now()
-    }
-
-    // 验证 token 是否有效
-    const tokenVerification = await milthmOIDCClient.verifyToken(
-      tokenResponse.access_token
-    )
-
-    if (!tokenVerification.isValid) {
-      logger.error('Token 验证失败', {
-        userId,
-        error: tokenVerification.error
-      })
-      throw new Error(`Token 已过期或无效: ${tokenVerification.error}`)
-    }
-
-    logger.info('Token 验证成功', { userId })
-
-    // 获取用户信息
-    const userInfo =
-      tokenVerification.userInfo ||
-      (await milthmOIDCClient.getUserInfo(tokenResponse.access_token))
-
-    logger.info(`成功获取用户 ${userId} 的信息`)
-
-    // 更新并保存凭据
-    credentials.userInfo = userInfo
-    saveCredentials(koishiBaseDir, credentials)
-    logger.info(`已保存用户 ${userId} 的凭据`)
-
-    // 等待5秒以避免JWT时钟偏移问题
-    await new Promise((resolve) => setTimeout(resolve, 5000))
-
-    // 获取存档数据
-    const saveDataInfo = await milthmOIDCClient.getUserSaveData(
-      tokenResponse.access_token
-    )
-
-    logger.info(`成功获取用户 ${userId} 的存档数据`, {
-      fileUrl: saveDataInfo.fileUrl
+      milthmUsername: username,
+      boundAt: Date.now()
     })
-
-    // 下载存档文件内容
-    const saveContent = await milthmOIDCClient.downloadSaveFile(
-      saveDataInfo.fileUrl
-    )
-
-    logger.info(`成功下载用户 ${userId} 的存档文件`)
-
-    // 保存存档数据
-    const savedAt = Date.now()
-    saveRecord(koishiBaseDir, {
-      userId,
-      content: saveContent,
-      userInfo,
-      savedAt
-    })
-    logger.info(`已保存用户 ${userId} 的存档`)
 
     // 清理会话
     sessionManager.removeSession(userId)
 
-    return { savedAt, userInfo }
+    return { username }
   } catch (error) {
     logger.error(`用户 ${userId} 授权流程失败`, { error })
 
-    // 根据错误类型设置不同的状态
-    if (error.message?.includes('授权超时')) {
+    if (error instanceof Error && error.message?.includes('授权超时')) {
       sessionManager.updateSessionStatus(userId, 'timeout')
     } else {
       sessionManager.updateSessionStatus(userId, 'failed')
@@ -242,75 +246,53 @@ export async function waitForAuthAndSaveData(
 }
 
 /**
- * 使用已保存的 refresh_token 更新存档
+ * 查询用户数据（通过 renya 代理）并缓存结果
  */
-export async function refreshAndUpdateSaveData(
+export async function queryUserData(
   userId: string
-): Promise<{ savedAt: number; userInfo: any }> {
-  if (!milthmOIDCClient || !koishiBaseDir) {
+): Promise<NyaProfilerQueryResponse> {
+  if (!nyaProfilerClient || !koishiBaseDir) {
     throw new Error('API 客户端未初始化')
   }
 
-  const credentials = loadCredentials(koishiBaseDir, userId)
-  if (!credentials?.refreshToken) {
-    throw new Error('没有可用的 refresh_token，请重新授权')
+  const binding = loadBinding(koishiBaseDir, userId)
+  if (!binding) {
+    throw new Error('未找到绑定记录，请先使用 milthm.update 命令授权绑定')
   }
 
-  logger.info(`使用 refresh_token 为用户 ${userId} 更新存档`)
+  const response = await nyaProfilerClient.queryUserData(binding.milthmUsername)
 
-  // 刷新访问令牌
-  const tokenResponse = await milthmOIDCClient.refreshAccessToken(
-    credentials.refreshToken
-  )
-
-  // 等待 k8s 集群同步新令牌，避免立即请求时出现 TokenExpireError
-  await new Promise((resolve) => setTimeout(resolve, 2000))
-
-  // 更新凭据
-  const updatedCredentials: UserCredentials = {
-    ...credentials,
-    accessToken: tokenResponse.access_token,
-    refreshToken: tokenResponse.refresh_token ?? credentials.refreshToken,
-    expiresAt: Date.now() + (tokenResponse.expires_in || 3600) * 1000,
-    savedAt: Date.now()
+  // 查询成功时缓存结果
+  if (response.result === '200' && response.details) {
+    saveCachedResult(koishiBaseDir, {
+      userId,
+      milthmUsername: binding.milthmUsername,
+      best20: response.details.best20,
+      extras: response.details.extras,
+      averageRating: response.details.averageRating,
+      totalScores: response.details.totalScores,
+      cachedAt: Date.now()
+    })
+    logger.info(`已缓存用户 ${userId} 的查询结果`)
   }
-  saveCredentials(koishiBaseDir, updatedCredentials)
 
-  // 获取存档数据
-  const saveDataInfo = await milthmOIDCClient.getUserSaveData(
-    tokenResponse.access_token
-  )
-  const saveContent = await milthmOIDCClient.downloadSaveFile(
-    saveDataInfo.fileUrl
-  )
-
-  // 保存存档数据
-  const savedAt = Date.now()
-  saveRecord(koishiBaseDir, {
-    userId,
-    content: saveContent,
-    userInfo: credentials.userInfo,
-    savedAt
-  })
-
-  logger.info(`成功更新用户 ${userId} 的存档数据`)
-  return { savedAt, userInfo: credentials.userInfo }
+  return response
 }
 
 /**
- * 获取本地存档记录
+ * 获取本地缓存的查询结果
  */
-export function getLocalSaveRecord(userId: string): UserSaveRecord | null {
+export function getCachedResult(userId: string): CachedQueryResult | null {
   if (!koishiBaseDir) return null
-  return loadRecord(koishiBaseDir, userId)
+  return loadCachedResult(koishiBaseDir, userId)
 }
 
 /**
- * 获取本地保存的用户凭据
+ * 获取本地绑定记录
  */
-export function getLocalCredentials(userId: string): UserCredentials | null {
+export function getLocalBinding(userId: string): UserBinding | null {
   if (!koishiBaseDir) return null
-  return loadCredentials(koishiBaseDir, userId)
+  return loadBinding(koishiBaseDir, userId)
 }
 
 /**
@@ -332,12 +314,9 @@ export function cancelAuthSession(userId: string): boolean {
 }
 
 /**
- * 登出用户，删除本地保存的凭据和存档数据
+ * 登出用户，删除本地绑定数据和缓存
  */
-export function logoutUser(userId: string): {
-  hadCredentials: boolean
-  hadRecord: boolean
-} {
+export function logoutUser(userId: string): { hadBinding: boolean } {
   if (!koishiBaseDir) {
     throw new Error('插件未初始化')
   }
@@ -350,12 +329,12 @@ export function logoutUser(userId: string): {
     }
   }
 
-  const hadCredentials = deleteCredentials(koishiBaseDir, userId)
-  const hadRecord = deleteRecord(koishiBaseDir, userId)
+  const hadBinding = deleteBinding(koishiBaseDir, userId)
+  deleteCachedResult(koishiBaseDir, userId)
 
-  logger.info(`用户 ${userId} 已登出`, { hadCredentials, hadRecord })
+  logger.info(`用户 ${userId} 已登出`, { hadBinding })
 
-  return { hadCredentials, hadRecord }
+  return { hadBinding }
 }
 
 /**
@@ -369,8 +348,7 @@ export function getSessionStatus(userId: string) {
   return sessionManager.getSession(userId)
 }
 
-// 导出图片生成功能和数据处理
+// 导出图片生成功能
 export { generateB20Image, setB20AssetsPath } from './renderer/image'
 export type { B20UserInfo } from './renderer/image'
-export { processSaveData } from './utils/processor'
 export * from './utils/calculator'
