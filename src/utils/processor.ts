@@ -57,7 +57,6 @@ export interface B20Result {
  * 处理存档数据，计算 B20
  */
 export function processSaveData(_ctx: Context, saveContent: string): B20Result {
-  // 解析存档
   const scores = parseSaveData(saveContent)
 
   if (scores.length === 0) {
@@ -70,17 +69,14 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
     }
   }
 
-  // 加载定数数据库
   const constantData = loadConstantData()
 
   const processedScores: ProcessedScore[] = []
 
   for (const score of scores) {
-    // 根据 chart_id 查找定数
     const chartInfo = constantData.get(score.chart_id)
 
     if (!chartInfo) {
-      // 跳过没有定数信息的谱面
       continue
     }
 
@@ -153,7 +149,6 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
       // - achievedStatus: 取并集
       // - isV3: 逻辑或
       if (score.singleRating > existing.singleRating) {
-        // 用更高 rating 的记录作为基础
         const merged = { ...score }
         merged.score = Math.max(existing.score, score.score)
         merged.accuracy = Math.max(existing.accuracy, score.accuracy)
@@ -164,7 +159,6 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
         merged.isV3 = existing.isV3 || score.isV3
         bestScores.set(score.chart_id, merged)
       } else {
-        // 保留已有记录但合并字段
         existing.score = Math.max(existing.score, score.score)
         existing.accuracy = Math.max(existing.accuracy, score.accuracy)
         existing.bestLevel = Math.min(existing.bestLevel, score.bestLevel)

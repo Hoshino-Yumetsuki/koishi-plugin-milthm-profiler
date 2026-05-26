@@ -48,7 +48,6 @@ export function setMainLogger(newLogger: Logger) {
   mainLogger = newLogger
 }
 
-// 全局实例
 let nyaProfilerClient: NyaProfilerClient | null = null
 let sessionManager: SessionManager | null = null
 let koishiBaseDir: string | null = null
@@ -158,7 +157,6 @@ export async function initClients(ctx: Context, config: Config) {
 
   sessionManager = new SessionManager()
 
-  // 初始化图片渲染器
   setB20AssetsPath(__dirname)
 
   logger.info('API 客户端初始化完成')
@@ -178,7 +176,6 @@ export async function generateAuthUrlForUser(
     throw new Error('会话管理器未初始化')
   }
 
-  // 检查是否已有进行中的会话
   const existingSession = sessionManager.getSession(userId)
   if (existingSession && existingSession.status === 'pending') {
     logger.warn(`用户 ${userId} 已有进行中的授权会话`)
@@ -188,10 +185,8 @@ export async function generateAuthUrlForUser(
     }
   }
 
-  // 生成新的授权链接
   const { url, uuid } = await nyaProfilerClient.generateAuthUrl()
 
-  // 创建会话
   sessionManager.createSession(userId, uuid, url)
 
   logger.info(`为用户 ${userId} 生成授权链接`, { uuid })
@@ -218,7 +213,6 @@ export async function waitForAuthAndBind(
   logger.info(`开始等待用户 ${userId} 完成授权`)
 
   try {
-    // 轮询等待授权完成
     const { username } = await nyaProfilerClient.waitForAuth(
       session.uuid,
       config.pollTimeout,
@@ -227,14 +221,12 @@ export async function waitForAuthAndBind(
 
     logger.info(`用户 ${userId} 已完成授权`, { milthmUsername: username })
 
-    // 保存绑定关系
     saveBinding(koishiBaseDir, {
       userId,
       milthmUsername: username,
       boundAt: Date.now()
     })
 
-    // 清理会话
     sessionManager.removeSession(userId)
 
     return { username }
@@ -268,7 +260,6 @@ export async function queryUserData(
 
   const response = await nyaProfilerClient.queryUserData(binding.milthmUsername)
 
-  // 查询成功时缓存结果
   if (response.result === '200' && response.details) {
     saveCachedResult(koishiBaseDir, {
       userId,
@@ -329,7 +320,6 @@ export function logoutUser(userId: string): { hadBinding: boolean } {
     throw new Error('插件未初始化')
   }
 
-  // 同时取消进行中的授权会话
   if (sessionManager) {
     const session = sessionManager.getSession(userId)
     if (session) {
@@ -356,7 +346,6 @@ export function getSessionStatus(userId: string) {
   return sessionManager.getSession(userId)
 }
 
-// 导出图片生成功能
 export { generateB20Image, setB20AssetsPath } from './renderer/image'
 export type { B20UserInfo } from './renderer/image'
 export * from './utils/calculator'

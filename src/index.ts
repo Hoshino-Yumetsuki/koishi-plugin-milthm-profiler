@@ -25,13 +25,11 @@ export function apply(ctx: Context, config: Config) {
 
   setMainLogger(logger)
 
-  // 初始化 API 客户端
   ctx.on('ready', async () => {
     initClients(ctx, config)
     logger.info('Milthm Profiler 插件已就绪')
   })
 
-  // 主命令：查分（使用本地缓存）
   ctx
     .command('milthm', 'Milthm 查分器')
     .alias('mlt')
@@ -40,13 +38,11 @@ export function apply(ctx: Context, config: Config) {
       const userId = session.userId
 
       try {
-        // 检查是否已绑定
         const binding = getLocalBinding(userId)
         if (!binding) {
           return '未绑定 Milthm 账号，请先使用 milthm.update 命令进行授权绑定'
         }
 
-        // 使用本地缓存
         const cached = getCachedResult(userId)
         if (!cached) {
           return '未找到本地缓存数据，请先使用 milthm.update 拉取数据'
@@ -85,7 +81,6 @@ export function apply(ctx: Context, config: Config) {
       }
     })
 
-  // 子命令：拉取最新数据
   ctx
     .command('milthm.update', '拉取最新数据（消耗每日下载次数）')
     .alias('mlt.update')
@@ -94,10 +89,8 @@ export function apply(ctx: Context, config: Config) {
       const userId = session.userId
 
       try {
-        // 检查是否已绑定
         const binding = getLocalBinding(userId)
         if (binding) {
-          // 已绑定，直接查询最新数据
           logger.info('拉取最新数据', {
             userId,
             username: binding.milthmUsername
@@ -115,7 +108,6 @@ export function apply(ctx: Context, config: Config) {
               const { username } = await waitForAuthAndBind(userId, config)
               logger.info('重新授权成功', { userId, username })
 
-              // 重新查询
               const retryResponse = await queryUserData(userId)
               if (retryResponse.result !== '200') {
                 return `查询失败: ${retryResponse.message}`
@@ -156,7 +148,6 @@ export function apply(ctx: Context, config: Config) {
 
         const { username } = await waitForAuthAndBind(userId, config)
 
-        // 绑定成功后立即查询数据
         const response = await queryUserData(userId)
         if (response.result !== '200') {
           return `绑定成功（${username}），但拉取数据失败: ${response.message}`
@@ -169,7 +160,6 @@ export function apply(ctx: Context, config: Config) {
       }
     })
 
-  // 子命令：取消授权
   ctx
     .command('milthm.cancel', '取消当前的授权请求')
     .alias('mlt.cancel')
@@ -185,7 +175,6 @@ export function apply(ctx: Context, config: Config) {
       }
     })
 
-  // 子命令：登出
   ctx
     .command('milthm.logout', '登出并清除本地绑定数据')
     .alias('mlt.logout')

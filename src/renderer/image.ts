@@ -30,14 +30,12 @@ import { createRequire } from 'node:module'
   } catch {}
 })()
 
-// 用户信息接口
 export interface B20UserInfo {
   username?: string
   nickname?: string
   userId?: string
 }
 
-// 全局状态
 let assetsPath = ''
 let vipsInstance: any = null
 let renderSequence = 0
@@ -49,8 +47,6 @@ const pngCache = new Map<string, Uint8Array>()
 export function setB20AssetsPath(dirname: string) {
   assetsPath = dirname
 }
-
-// 初始化
 
 async function initVips() {
   if (vipsInstance) return vipsInstance
@@ -321,8 +317,6 @@ function limitText(str: string, len: number): string {
   return str
 }
 
-// 布局
-
 const CANVAS_W = 1000
 
 // 头部
@@ -357,8 +351,6 @@ const CAT_BAR_H = 18
 
 // OVERFLOW 分割线区域高度
 const SPLIT_H = 50
-
-// 生成函数
 
 export interface ChartProgress {
   CL: { all: number; ap: number; fc: number; cl: number }
@@ -675,10 +667,8 @@ export async function generateB20Image(
     }
   }
 
-  // 底部 footer
   buildFooter(children, canvasH, footerH)
 
-  // 根容器
   const root = container({
     children,
     style: {
@@ -697,8 +687,6 @@ export async function generateB20Image(
   })
   return Buffer.from(buffer)
 }
-
-/* ===== 头部构建 ===== */
 
 function buildHeader(
   children: any[],
@@ -1114,23 +1102,7 @@ function buildHeader(
       })
     )
   }
-
-  // Tip (底部左侧)
-  // const tipY = infoY + 10
-  // children.push(
-  // container({
-  // style: { position: 'absolute', left: HEADER_PAD + 3, top: tipY },
-  // children: [
-  // textNode('Tip: 查分上 https://mhtlim.top/', {
-  // fontSize: 13,
-  // color: '#ffffff'
-  // })
-  // ]
-  // })
-  // )
 }
-
-/* ===== Chart Progress 计算 ===== */
 
 function calculateChartProgress(items: ProcessedScore[]): ChartProgress {
   // 从 constantData 获取各难度总谱面数
@@ -1179,8 +1151,6 @@ function calculateChartProgress(items: ProcessedScore[]): ChartProgress {
 
   return progress
 }
-
-/* ===== 卡片构建 ===== */
 
 function buildCard(
   children: any[],
@@ -1403,8 +1373,6 @@ function buildCard(
   )
 }
 
-/* ===== OVERFLOW 分割线 ===== */
-
 function buildOverflowSplit(children: any[], splitY: number) {
   // 竖条 (.line: 3px solid #d1d8ff, height 25px, border-radius 100)
   children.push(
@@ -1477,8 +1445,6 @@ function buildExtrasSplit(children: any[], splitY: number) {
     })
   )
 }
-
-/* ===== Footer ===== */
 
 function buildFooter(children: any[], canvasH: number, footerH: number) {
   const footerY = canvasH - footerH
@@ -1575,8 +1541,6 @@ function buildFooter(children: any[], canvasH: number, footerH: number) {
     })
   )
 }
-
-/* ===== 文本宽度估算 ===== */
 
 function estimateTextW(str: string, fontSize: number): number {
   let w = 0

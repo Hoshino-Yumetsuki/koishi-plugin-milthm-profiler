@@ -185,6 +185,7 @@ export class NyaProfilerClient {
 
       // 401 with needAuth means token expired, need re-authorization
       // 404 means user has no authorization record for this app
+      // 429 means daily download limit reached
       if (!response.ok) {
         if (response.status === 401 && data.details?.needAuth) {
           this.logger.warn('用户令牌已过期，需要重新授权', { username })
@@ -197,6 +198,10 @@ export class NyaProfilerClient {
             message: data.message,
             details: { needAuth: true }
           } as NyaProfilerQueryResponse
+        }
+        if (response.status === 429) {
+          this.logger.warn('今日下载次数已达上限', { username })
+          throw new Error('今日存档下载次数已达上限，请明天再试')
         }
         throw new Error(`查询用户数据失败: ${data.message}`)
       }

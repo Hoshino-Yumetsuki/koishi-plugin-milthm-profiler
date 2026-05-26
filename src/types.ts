@@ -1,4 +1,3 @@
-// Nya Profiler API 响应类型
 export interface NyaProfilerGenResponse {
   result: string
   message: string
@@ -72,7 +71,6 @@ export interface ProcessedScore {
   achievedStatus: number[]
 }
 
-// 授权会话类型
 export interface AuthSession {
   userId: string
   uuid: string

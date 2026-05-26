@@ -35,7 +35,6 @@ export interface RatingResult {
   isAP: boolean
 }
 
-// 评分标准
 const NOTE_WEIGHTS = {
   perfect: 1.0,
   great: 0.7,
@@ -44,7 +43,6 @@ const NOTE_WEIGHTS = {
   miss: 0.0
 }
 
-// 评级分数线
 const RANK_THRESHOLDS = {
   'S++': 1_000_000,
   'S+': 990_000,
@@ -55,8 +53,6 @@ const RANK_THRESHOLDS = {
   D: 800_000,
   F: 0
 }
-
-// 计算得分
 
 export function calculateScore(result: ScoreResult): number {
   const totalWeight =
@@ -71,13 +67,11 @@ export function calculateScore(result: ScoreResult): number {
   return Math.floor((totalWeight / maxWeight) * 1_000_000)
 }
 
-// 计算准确率
 export function calculateAccuracy(result: ScoreResult): number {
   const score = result.score || calculateScore(result)
   return (score / 1_000_000) * 100
 }
 
-// 获取评级
 export function getRank(score: number): string {
   for (const [rank, threshold] of Object.entries(RANK_THRESHOLDS)) {
     if (score >= threshold) {
@@ -125,13 +119,12 @@ export function calculateSingleRatingV2(
   if (score >= 700_000) return score / 280_000 - 4 + constant
   return 0
 }
-// 完整计算 Rating 结果
+
 export function calculateRating(
   song: SongInfo,
   result: ScoreResult
 ): RatingResult {
   const score = result.score || calculateScore(result)
-  const _accuracy = calculateAccuracy({ ...result, score })
   const rank = getRank(score)
   const rating = calculateSingleRating(song.constant, score)
   const isFC = result.bad === 0 && result.miss === 0
