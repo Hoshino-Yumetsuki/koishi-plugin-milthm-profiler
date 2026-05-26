@@ -24,6 +24,7 @@ export interface NyaProfilerQueryResponse {
     username: string
     best20: ProcessedScore[]
     extras: ProcessedScore[]
+    allScores: ProcessedScore[]
     averageRating: number
     totalScores: number
     /** Present when token expired and re-auth is needed */

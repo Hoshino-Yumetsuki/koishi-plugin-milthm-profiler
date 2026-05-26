@@ -67,7 +67,7 @@ export function apply(ctx: Context, config: Config) {
         const b20Result = {
           best20: cached.best20,
           extras: cached.extras,
-          allScores: cached.best20,
+          allScores: cached.allScores,
           averageRating: cached.averageRating,
           totalScores: cached.totalScores
         }
@@ -228,7 +228,7 @@ async function renderAndSend(
   const b20Result = {
     best20,
     extras: response.details.extras || [],
-    allScores: best20,
+    allScores: response.details.allScores || best20,
     averageRating,
     totalScores: response.details.totalScores || best20.length
   }

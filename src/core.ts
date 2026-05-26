@@ -68,6 +68,7 @@ export interface CachedQueryResult {
   milthmUsername: string
   best20: ProcessedScore[]
   extras: ProcessedScore[]
+  allScores: ProcessedScore[]
   averageRating: number
   totalScores: number
   /** 缓存时间戳（毫秒） */
@@ -269,6 +270,7 @@ export async function queryUserData(
       milthmUsername: binding.milthmUsername,
       best20: response.details.best20,
       extras: response.details.extras,
+      allScores: response.details.allScores,
       averageRating: response.details.averageRating,
       totalScores: response.details.totalScores,
       cachedAt: Date.now()
