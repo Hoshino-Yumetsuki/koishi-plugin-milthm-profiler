@@ -195,6 +195,26 @@ export async function generateAuthUrlForUser(
 }
 
 /**
+ * 使用已有的授权链接和 uuid 注册会话并等待授权完成
+ * 用于 renya 返回 needAuth + url + uuid 的场景（token 过期重新授权）
+ */
+export async function registerAndWaitForAuth(
+  userId: string,
+  url: string,
+  uuid: string,
+  config: Config
+): Promise<{ username: string }> {
+  if (!sessionManager) {
+    throw new Error('会话管理器未初始化')
+  }
+
+  // 注册到 sessionManager 以便 waitForAuthAndBind 能找到
+  sessionManager.createSession(userId, uuid, url)
+
+  return await waitForAuthAndBind(userId, config)
+}
+
+/**
  * 等待用户完成授权并保存绑定关系
  */
 export async function waitForAuthAndBind(

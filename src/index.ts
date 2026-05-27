@@ -5,6 +5,7 @@ import {
   initClients,
   generateAuthUrlForUser,
   waitForAuthAndBind,
+  registerAndWaitForAuth,
   queryUserData,
   cancelAuthSession,
   logoutUser,
@@ -89,8 +90,10 @@ export function apply(ctx: Context, config: Config) {
       const userId = session.userId
 
       try {
+        // 检查是否已绑定
         const binding = getLocalBinding(userId)
         if (binding) {
+          // 已绑定，直接查询最新数据
           logger.info('拉取最新数据', {
             userId,
             username: binding.milthmUsername
@@ -99,29 +102,30 @@ export function apply(ctx: Context, config: Config) {
 
           // 需要重新授权
           if (response.details?.needAuth) {
-            if (response.details.url) {
-              await session.send(
-                '授权已过期，需要重新授权。请在浏览器中打开以下链接完成授权（5分钟内有效）：'
-              )
-              await session.send(response.details.url)
+            let authUrl: string
+            let waitFn: () => Promise<{ username: string }>
 
-              const { username } = await waitForAuthAndBind(userId, config)
-              logger.info('重新授权成功', { userId, username })
-
-              const retryResponse = await queryUserData(userId)
-              if (retryResponse.result !== '200') {
-                return `查询失败: ${retryResponse.message}`
-              }
-              return await renderAndSend(session, retryResponse, username)
+            if (response.details.url && response.details.uuid) {
+              // renya 已生成授权链接和 uuid，直接使用并轮询
+              authUrl = response.details.url
+              const uuid = response.details.uuid
+              waitFn = () =>
+                registerAndWaitForAuth(userId, authUrl, uuid, config)
+            } else {
+              // 需要自行生成新的授权链接
+              const gen = await generateAuthUrlForUser(userId)
+              authUrl = gen.url
+              waitFn = () => waitForAuthAndBind(userId, config)
             }
-            // 没有 url 说明需要完整重新授权
-            const { url } = await generateAuthUrlForUser(userId)
+
             await session.send(
               '授权已过期，请在浏览器中打开以下链接重新授权（5分钟内有效）：'
             )
-            await session.send(url)
+            await session.send(authUrl)
 
-            const { username } = await waitForAuthAndBind(userId, config)
+            const { username } = await waitFn()
+            logger.info('重新授权成功', { userId, username })
+
             const retryResponse = await queryUserData(userId)
             if (retryResponse.result !== '200') {
               return `查询失败: ${retryResponse.message}`
