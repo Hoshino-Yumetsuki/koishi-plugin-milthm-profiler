@@ -14,7 +14,7 @@ export const Config: Schema<Config> = Schema.object({
     apiKey: Schema.string()
       .role('secret')
       .required()
-      .description('Re Nya Profiler 的 API Key （从 https://renya.milthm.top/ 中获取）')
+      .description('Re Nya Profiler 的 API Key （从 https://renya.mhtlim.top/ 中获取）')
   }).description('Re Nya Profiler API 配置'),
 
   pollTimeout: Schema.number()
