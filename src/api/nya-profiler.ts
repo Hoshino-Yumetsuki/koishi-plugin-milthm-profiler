@@ -4,7 +4,7 @@ import type {
   NyaProfilerQueryResponse
 } from '../types'
 
-const NYA_PROFILER_BASE_URL = 'https://renya.mhtl.im/api/external'
+const NYA_PROFILER_BASE_URL = 'https://renya.milthm.top/api/external'
 
 export class NyaProfilerClient {
   constructor(
@@ -24,7 +24,7 @@ export class NyaProfilerClient {
       const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
-          Referer: 'https://nya.mhtl.im/'
+          Referer: 'https://renya.milthm.top/'
         }
       })
       const responseText = await response.text()
@@ -81,7 +81,7 @@ export class NyaProfilerClient {
       const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
-          Referer: 'https://renya.mhtl.im/'
+          Referer: 'https://renya.milthm.top/'
         }
       })
       const responseText = await response.text()
@@ -170,7 +170,7 @@ export class NyaProfilerClient {
       const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
-          Referer: 'https://renya.mhtl.im/'
+          Referer: 'https://renya.milthm.top/'
         }
       })
       const responseText = await response.text()
