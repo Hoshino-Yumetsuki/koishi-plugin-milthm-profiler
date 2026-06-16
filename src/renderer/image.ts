@@ -9,65 +9,65 @@
  *   .split-title: 3px solid #d1d8ff
  */
 
-import { Renderer, initSync } from '@takumi-rs/wasm'
-import { image, container, text as textNode } from '@takumi-rs/helpers'
-import type { Context } from 'koishi'
-import type { ProcessedScore, B20Result } from '../utils/processor'
-import { loadConstantData } from '../utils/constant-loader'
-import coversData from 'virtual:milthm-covers'
-import Vips from 'wasm-vips'
-import * as fs from 'node:fs/promises'
-import { readFileSync } from 'node:fs'
-import * as path from 'node:path'
-import { createRequire } from 'node:module'
+import { Renderer, initSync } from '@takumi-rs/wasm';
+import { image, container, text as textNode } from '@takumi-rs/helpers';
+import type { Context } from 'koishi';
+import type { ProcessedScore, B20Result } from '../utils/processor';
+import { loadConstantData } from '../utils/constant-loader';
+import coversData from 'virtual:milthm-covers';
+import Vips from 'wasm-vips';
+import * as fs from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import * as path from 'node:path';
+import { createRequire } from 'node:module';
 
-;(function ensureWasmInit() {
+(function ensureWasmInit() {
   try {
-    const require = createRequire(import.meta.url)
-    const wasmPath = require.resolve('@takumi-rs/wasm/takumi_wasm_bg.wasm')
-    const wasmBytes = readFileSync(wasmPath)
-    initSync({ module: wasmBytes })
+    const require = createRequire(import.meta.url);
+    const wasmPath = require.resolve('@takumi-rs/wasm/takumi_wasm_bg.wasm');
+    const wasmBytes = readFileSync(wasmPath);
+    initSync({ module: wasmBytes });
   } catch {}
-})()
+})();
 
 export interface B20UserInfo {
-  username?: string
-  nickname?: string
-  userId?: string
+  username?: string;
+  nickname?: string;
+  userId?: string;
 }
 
-let assetsPath = ''
-let vipsInstance: any = null
-let renderSequence = 0
-let fontCache: Uint8Array[] | null = null
-let illustrationMapPromise: Promise<Map<string, string>> | null = null
+let assetsPath = '';
+let vipsInstance: any = null;
+let renderSequence = 0;
+let fontCache: Uint8Array[] | null = null;
+let illustrationMapPromise: Promise<Map<string, string>> | null = null;
 
-const pngCache = new Map<string, Uint8Array>()
+const pngCache = new Map<string, Uint8Array>();
 
 export function setB20AssetsPath(dirname: string) {
-  assetsPath = dirname
+  assetsPath = dirname;
 }
 
 async function initVips() {
-  if (vipsInstance) return vipsInstance
-  vipsInstance = await Vips({ dynamicLibraries: ['vips-heif.wasm'] })
-  vipsInstance.concurrency(1)
-  vipsInstance.Cache.max(0)
-  return vipsInstance
+  if (vipsInstance) return vipsInstance;
+  vipsInstance = await Vips({ dynamicLibraries: ['vips-heif.wasm'] });
+  vipsInstance.concurrency(1);
+  vipsInstance.Cache.max(0);
+  return vipsInstance;
 }
 
 async function initRenderer() {
   if (!fontCache) {
-    fontCache = []
+    fontCache = [];
     const fontDirs = [
       ['Chill Round', 'ChillRoundF v3.0.ttf'],
       ['alimamafangyuanti', 'AlimamaFangYuanTiVF-Thin.ttf']
-    ]
+    ];
     for (const [dir, file] of fontDirs) {
       try {
-        const fontPath = path.join(assetsPath, 'assets', 'fonts', dir, file)
-        const fontBuffer = await fs.readFile(fontPath)
-        fontCache.push(new Uint8Array(fontBuffer))
+        const fontPath = path.join(assetsPath, 'assets', 'fonts', dir, file);
+        const fontBuffer = await fs.readFile(fontPath);
+        fontCache.push(new Uint8Array(fontBuffer));
       } catch {
         // font not available
       }
@@ -78,107 +78,99 @@ async function initRenderer() {
   // preventing system fonts from taking priority over our custom fonts.
   const renderer = new Renderer({
     fonts: fontCache ?? []
-  })
-  return renderer
+  });
+  return renderer;
 }
 
 // AVIF → PNG (used for icons/backgrounds only)
 
 async function convertAvifToPng(avifBuffer: Buffer): Promise<Uint8Array> {
-  const vips = await initVips()
-  let img: any = null
+  const vips = await initVips();
+  let img: any = null;
   try {
-    img = vips.Image.newFromBuffer(avifBuffer)
-    const pngBuffer = img.writeToBuffer('.png', { compression: 6 })
-    return new Uint8Array(pngBuffer)
+    img = vips.Image.newFromBuffer(avifBuffer);
+    const pngBuffer = img.writeToBuffer('.png', { compression: 6 });
+    return new Uint8Array(pngBuffer);
   } finally {
     if (img) {
       try {
-        img[Symbol.dispose]()
+        img[Symbol.dispose]();
       } catch {}
     }
   }
 }
 
 async function loadAvifImage(relativePath: string): Promise<Uint8Array | null> {
-  const cached = pngCache.get(relativePath)
-  if (cached) return cached
-  const fullPath = path.join(assetsPath, 'assets', relativePath)
+  const cached = pngCache.get(relativePath);
+  if (cached) return cached;
+  const fullPath = path.join(assetsPath, 'assets', relativePath);
   try {
-    const avifBuffer = await fs.readFile(fullPath)
-    const pngData = await convertAvifToPng(avifBuffer)
-    if (pngCache.size < 200) pngCache.set(relativePath, pngData)
-    return pngData
+    const avifBuffer = await fs.readFile(fullPath);
+    const pngData = await convertAvifToPng(avifBuffer);
+    if (pngCache.size < 200) pngCache.set(relativePath, pngData);
+    return pngData;
   } catch {
-    return null
+    return null;
   }
 }
 
 function registerImage(r: Renderer, key: string, data: Uint8Array) {
-  r.putPersistentImage({ src: key, data })
+  r.putPersistentImage({ src: key, data });
 }
 
 // song name → webp filename, built from assets/covers/cover-map.json
 async function loadCoverMap(): Promise<Map<string, string>> {
   if (!illustrationMapPromise) {
     illustrationMapPromise = (async () => {
-      const map = new Map<string, string>()
+      const map = new Map<string, string>();
       try {
-        const mapPath = path.join(
-          assetsPath,
-          'assets',
-          'covers',
-          'cover-map.json'
-        )
-        const raw = await fs.readFile(mapPath, 'utf-8')
-        const obj = JSON.parse(raw) as Record<string, string>
+        const mapPath = path.join(assetsPath, 'assets', 'covers', 'cover-map.json');
+        const raw = await fs.readFile(mapPath, 'utf-8');
+        const obj = JSON.parse(raw) as Record<string, string>;
         for (const [title, filename] of Object.entries(obj)) {
-          map.set(title, filename)
+          map.set(title, filename);
         }
       } catch {
         // cover map unavailable
       }
-      return map
-    })()
+      return map;
+    })();
   }
-  return illustrationMapPromise
+  return illustrationMapPromise;
 }
 
-async function loadCoverForChart(
-  chartId: string,
-  songName: string
-): Promise<Uint8Array | null> {
-  const cacheKey = `cover:${chartId}`
-  const cached = pngCache.get(cacheKey)
-  if (cached) return cached
+async function loadCoverForChart(chartId: string, songName: string): Promise<Uint8Array | null> {
+  const cacheKey = `cover:${chartId}`;
+  const cached = pngCache.get(cacheKey);
+  if (cached) return cached;
 
   // First try chart_id lookup (virtual:milthm-covers, built from out.json)
-  let filename: string | undefined = coversData[chartId]
+  let filename: string | undefined = coversData[chartId];
   // Fallback to song name lookup (cover-map.json)
   if (!filename) {
-    const coverMap = await loadCoverMap()
-    filename = coverMap.get(songName)
+    const coverMap = await loadCoverMap();
+    filename = coverMap.get(songName);
   }
-  if (!filename) return null
+  if (!filename) return null;
 
-  const coverPath = path.join(assetsPath, 'assets', 'covers', filename)
+  const coverPath = path.join(assetsPath, 'assets', 'covers', filename);
   try {
-    const data = new Uint8Array(await fs.readFile(coverPath))
-    if (pngCache.size < 200) pngCache.set(cacheKey, data)
-    return data
+    const data = new Uint8Array(await fs.readFile(coverPath));
+    if (pngCache.size < 200) pngCache.set(cacheKey, data);
+    return data;
   } catch {
-    return null
+    return null;
   }
 }
 
 function getLevelIconName(item: ProcessedScore): string {
-  if (item.bestLevel === 0) return '0'
-  if (item.bestLevel === 6 || item.bestLevel === 7) return '6'
+  if (item.bestLevel === 0) return '0';
+  if (item.bestLevel === 6 || item.bestLevel === 7) return '6';
   if (Array.isArray(item.achievedStatus) && item.achievedStatus.includes(5))
-    return `${item.bestLevel}0`
+    return `${item.bestLevel}0`;
   if (Array.isArray(item.achievedStatus) && item.achievedStatus.includes(4))
-    return `${item.bestLevel}1`
-  return `${item.bestLevel}`
+    return `${item.bestLevel}1`;
+  return `${item.bestLevel}`;
 }
 
 function isV3Highlight(item: ProcessedScore): boolean {
@@ -188,7 +180,7 @@ function isV3Highlight(item: ProcessedScore): boolean {
     item.score >= 1005000 ||
     (Array.isArray(item.achievedStatus) &&
       (item.achievedStatus.includes(2) || item.achievedStatus.includes(5)))
-  )
+  );
 }
 
 /**
@@ -203,17 +195,17 @@ function isV3Highlight(item: ProcessedScore): boolean {
 function getCategoryColor(cat: string): string {
   switch (cat) {
     case 'CB':
-      return '#7A73ED'
+      return '#7A73ED';
     case 'CL':
-      return '#A3A3A3'
+      return '#A3A3A3';
     case 'DZ':
-      return '#A3C8D0'
+      return '#A3C8D0';
     case 'SK':
-      return '#809EE7'
+      return '#809EE7';
     case 'SP':
-      return '#FFFFFF'
+      return '#FFFFFF';
     default:
-      return '#344DCA'
+      return '#344DCA';
   }
 }
 
@@ -225,75 +217,68 @@ function getCategoryColor(cat: string): string {
  * 普通: 白色
  */
 function getScoreColor(item: ProcessedScore): string {
-  const iconName = getLevelIconName(item)
-  if (iconName === '0' || iconName === '0-1') return '#969BFA'
-  if (iconName.length > 1 && iconName[1] === '0') return '#BFA0FC'
-  return '#FFFFFF'
+  const iconName = getLevelIconName(item);
+  if (iconName === '0' || iconName === '0-1') return '#969BFA';
+  if (iconName.length > 1 && iconName[1] === '0') return '#BFA0FC';
+  return '#FFFFFF';
 }
 
 /**
  * 星标计算
  */
 function calculateStars(items: ProcessedScore[]): number {
-  let maxConstant = -Infinity
+  let maxConstant = -Infinity;
   for (const item of items) {
     if (Array.isArray(item.achievedStatus) && item.achievedStatus.includes(5)) {
-      if (item.constantv3 > maxConstant) maxConstant = item.constantv3
+      if (item.constantv3 > maxConstant) maxConstant = item.constantv3;
     }
   }
-  if (maxConstant >= 240) return 114514
-  if (maxConstant >= 200) return 9
-  if (maxConstant >= 180) return 8
-  if (maxConstant >= 160) return 7
-  if (maxConstant >= 140) return 6
-  if (maxConstant >= 120) return 5
-  if (maxConstant >= 100) return 4
-  if (maxConstant >= 12) return 3
-  if (maxConstant >= 9) return 2
-  if (maxConstant >= 6) return 1
-  return 0
+  if (maxConstant >= 240) return 114514;
+  if (maxConstant >= 200) return 9;
+  if (maxConstant >= 180) return 8;
+  if (maxConstant >= 160) return 7;
+  if (maxConstant >= 140) return 6;
+  if (maxConstant >= 120) return 5;
+  if (maxConstant >= 100) return 4;
+  if (maxConstant >= 12) return 3;
+  if (maxConstant >= 9) return 2;
+  if (maxConstant >= 6) return 1;
+  return 0;
 }
 
 /**
  * 目标分推算
  */
-function findScore(
-  constant: number,
-  target: number,
-  errorReturn = 'No remaining'
-): string {
-  if (target <= 0) return '0600000'
-  if (target > constant + 1.5) return errorReturn
+function findScore(constant: number, target: number, errorReturn = 'No remaining'): string {
+  if (target <= 0) return '0600000';
+  if (target > constant + 1.5) return errorReturn;
 
   if (target >= constant) {
-    if (target === constant + 1.5) return '1000000'
-    return String(Math.ceil(850000 + (target - constant) * 100000)).padStart(
-      7,
-      '0'
-    )
+    if (target === constant + 1.5) return '1000000';
+    return String(Math.ceil(850000 + (target - constant) * 100000)).padStart(7, '0');
   }
 
   if (target >= Math.max(0, 0.5 * constant - 1.5)) {
-    const denominator = constant / 300000 + 1 / 100000
-    const score = (target + (constant * 11) / 6 + 8.5) / denominator
-    return String(Math.min(Math.ceil(score), 849999)).padStart(7, '0')
+    const denominator = constant / 300000 + 1 / 100000;
+    const score = (target + (constant * 11) / 6 + 8.5) / denominator;
+    return String(Math.min(Math.ceil(score), 849999)).padStart(7, '0');
   }
 
-  if (Math.abs(constant - 3) < 1e-6) return '0600000'
-  const score = 600000 + (target * 200000) / (constant - 3)
-  return String(Math.min(Math.ceil(score), 699999)).padStart(7, '0')
+  if (Math.abs(constant - 3) < 1e-6) return '0600000';
+  const score = 600000 + (target * 200000) / (constant - 3);
+  return String(Math.min(Math.ceil(score), 699999)).padStart(7, '0');
 }
 
 function toDisplayNumber(value: number): number {
-  return Number.isFinite(value) ? value : 0
+  return Number.isFinite(value) ? value : 0;
 }
 
 /**
  * 检查 Top20 是否全部满足 V3 条件
  */
 function checkTop20V3Condition(items: ProcessedScore[]): boolean {
-  if (items.length === 0) return true
-  const top20 = items.slice(0, Math.min(20, items.length))
+  if (items.length === 0) return true;
+  const top20 = items.slice(0, Math.min(20, items.length));
   return top20.every(
     (it) =>
       it.isV3 ||
@@ -301,62 +286,62 @@ function checkTop20V3Condition(items: ProcessedScore[]): boolean {
       it.score >= 1005000 ||
       (Array.isArray(it.achievedStatus) &&
         (it.achievedStatus.includes(2) || it.achievedStatus.includes(5)))
-  )
+  );
 }
 
 function limitText(str: string, len: number): string {
-  let l = 0
-  const chars = [...str]
+  let l = 0;
+  const chars = [...str];
   for (let i = 0; i < chars.length; i++) {
-    const code = chars[i].charCodeAt(0)
-    if (code > 255) l += 2
-    else if (/[A-Z]/.test(chars[i]) && chars[i] !== 'I') l += 1.5
-    else l += 1
-    if (l >= len) return `${str.slice(0, Math.max(i - 2, 0))}...`
+    const code = chars[i].charCodeAt(0);
+    if (code > 255) l += 2;
+    else if (/[A-Z]/.test(chars[i]) && chars[i] !== 'I') l += 1.5;
+    else l += 1;
+    if (l >= len) return `${str.slice(0, Math.max(i - 2, 0))}...`;
   }
-  return str
+  return str;
 }
 
-const CANVAS_W = 1000
+const CANVAS_W = 1000;
 
 // 头部
-const HEADER_PAD = 40
+const HEADER_PAD = 40;
 
 // 卡片网格 (.down padding: 40px 40px 10px 40px, gap: 30px)
-const GRID_PAD_X = 40
-const GRID_PAD_TOP = 10
-const GRID_GAP = 30
+const GRID_PAD_X = 40;
+const GRID_PAD_TOP = 10;
+const GRID_GAP = 30;
 
 // 卡片 (.cardcover: 450×136, border-radius 23, padding 10)
-const CARD_W = 450
-const CARD_H = 136
-const CARD_RADIUS = 23
-const CARD_PAD = 10
+const CARD_W = 450;
+const CARD_H = 136;
+const CARD_RADIUS = 23;
+const CARD_PAD = 10;
 
 // 封面 (.cardimgcover: 204.444×115, border-radius 15, margin-right 8)
-const COVER_W = 204
-const COVER_H = 115
-const COVER_RADIUS = 15
-const COVER_MR = 8
+const COVER_W = 204;
+const COVER_H = 115;
+const COVER_RADIUS = 15;
+const COVER_MR = 8;
 
 // 文字区 (.cardtext: width 205, padding 5)
-const TEXT_PAD = 5
+const TEXT_PAD = 5;
 
 // 段位图标 (.grade max-width 50, margin -10, margin-top -8)
-const GRADE_ICON_W = 40
+const GRADE_ICON_W = 40;
 
 // 类别色条
-const CAT_BAR_W = 6
-const CAT_BAR_H = 18
+const CAT_BAR_W = 6;
+const CAT_BAR_H = 18;
 
 // OVERFLOW 分割线区域高度
-const SPLIT_H = 50
+const SPLIT_H = 50;
 
 export interface ChartProgress {
-  CL: { all: number; ap: number; fc: number; cl: number }
-  CB: { all: number; ap: number; fc: number; cl: number }
-  SK: { all: number; ap: number; fc: number; cl: number }
-  DZ: { all: number; ap: number; fc: number; cl: number }
+  CL: { all: number; ap: number; fc: number; cl: number };
+  CB: { all: number; ap: number; fc: number; cl: number };
+  SK: { all: number; ap: number; fc: number; cl: number };
+  DZ: { all: number; ap: number; fc: number; cl: number };
 }
 
 export async function generateB20Image(
@@ -364,74 +349,56 @@ export async function generateB20Image(
   result: B20Result,
   userInfo?: B20UserInfo
 ): Promise<Buffer> {
-  const r = await initRenderer()
-  await initVips()
-  const renderKeyPrefix = `render_${Date.now()}_${++renderSequence}`
+  const r = await initRenderer();
+  await initVips();
+  const renderKeyPrefix = `render_${Date.now()}_${++renderSequence}`;
 
-  const items = result.best20
-  const extras = result.extras ?? []
-  const cardCount = items.length
-  const b20Count = Math.min(cardCount, 20)
-  const overflowCount = Math.max(0, cardCount - 20)
-  const extrasCount = extras.length
+  const items = result.best20;
+  const extras = result.extras ?? [];
+  const cardCount = items.length;
+  const b20Count = Math.min(cardCount, 20);
+  const overflowCount = Math.max(0, cardCount - 20);
+  const extrasCount = extras.length;
 
   // 网格: 2 列
-  const cols = 2
-  const b20Rows = Math.ceil(b20Count / cols)
-  const overflowRows = Math.ceil(overflowCount / cols)
-  const extrasRows = Math.ceil(extrasCount / cols)
+  const cols = 2;
+  const b20Rows = Math.ceil(b20Count / cols);
+  const overflowRows = Math.ceil(overflowCount / cols);
+  const extrasRows = Math.ceil(extrasCount / cols);
 
   // 头部区域高度
-  const headerH = 260
+  const headerH = 260;
 
   // B20 卡片区域高度
-  const b20GridH = GRID_PAD_TOP + b20Rows * (CARD_H + GRID_GAP)
+  const b20GridH = GRID_PAD_TOP + b20Rows * (CARD_H + GRID_GAP);
 
   // OVERFLOW 区域
-  const overflowH =
-    overflowCount > 0 ? SPLIT_H + overflowRows * (CARD_H + GRID_GAP) : 0
+  const overflowH = overflowCount > 0 ? SPLIT_H + overflowRows * (CARD_H + GRID_GAP) : 0;
 
   // EXTRAS 区域
-  const extrasH =
-    extrasCount > 0 ? SPLIT_H + extrasRows * (CARD_H + GRID_GAP) : 0
+  const extrasH = extrasCount > 0 ? SPLIT_H + extrasRows * (CARD_H + GRID_GAP) : 0;
 
   // 底部
-  const footerH = 108
+  const footerH = 108;
 
-  const canvasH = headerH + b20GridH + overflowH + extrasH + footerH
+  const canvasH = headerH + b20GridH + overflowH + extrasH + footerH;
 
   // ===== 1. 加载背景 =====
-  const bgNames = [
-    '1',
-    '2',
-    '3',
-    '4',
-    '5',
-    '6',
-    '7',
-    '8',
-    '9',
-    '10',
-    '11',
-    '12',
-    '13',
-    '14',
-    '15'
-  ]
-  const bgFile = bgNames[Math.floor(Math.random() * bgNames.length)]
-  const bgPng = await loadAvifImage(`backgrounds/${bgFile}.avif`)
-  const bgKey = `${renderKeyPrefix}_bg`
-  if (bgPng) registerImage(r, bgKey, bgPng)
+  const bgNames = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'];
+  const bgFile = bgNames[Math.floor(Math.random() * bgNames.length)];
+  const bgPng = await loadAvifImage(`backgrounds/${bgFile}.avif`);
+  const bgKey = `${renderKeyPrefix}_bg`;
+  if (bgPng) registerImage(r, bgKey, bgPng);
 
   // ===== 2. 预加载封面和段位图标 =====
-  const coverKeys: (string | null)[] = []
-  const iconKeys: (string | null)[] = []
-  const extrasCoverKeys: (string | null)[] = []
-  const extrasIconKeys: (string | null)[] = []
-  const registeredIcons = new Set<string>()
+  const coverKeys: (string | null)[] = [];
+  const iconKeys: (string | null)[] = [];
+  const extrasCoverKeys: (string | null)[] = [];
+  const extrasIconKeys: (string | null)[] = [];
+  const registeredIcons = new Set<string>();
 
-  const allRenderItems = [...items, ...extras]
-  const uniqueIconNames = [...new Set(allRenderItems.map(getLevelIconName))]
+  const allRenderItems = [...items, ...extras];
+  const uniqueIconNames = [...new Set(allRenderItems.map(getLevelIconName))];
 
   const [coverResults, extrasCoverResults, iconResults] = await Promise.all([
     Promise.all(
@@ -460,48 +427,48 @@ export async function generateB20Image(
         }))
       )
     )
-  ])
+  ]);
 
   for (const { key, png } of coverResults) {
     if (png) {
-      registerImage(r, key, png)
-      coverKeys.push(key)
+      registerImage(r, key, png);
+      coverKeys.push(key);
     } else {
-      coverKeys.push(null)
+      coverKeys.push(null);
     }
   }
 
   for (const { key, png } of extrasCoverResults) {
     if (png) {
-      registerImage(r, key, png)
-      extrasCoverKeys.push(key)
+      registerImage(r, key, png);
+      extrasCoverKeys.push(key);
     } else {
-      extrasCoverKeys.push(null)
+      extrasCoverKeys.push(null);
     }
   }
 
   for (const { iconName, png } of iconResults) {
-    const iconKey = `${renderKeyPrefix}_icon_${iconName}`
+    const iconKey = `${renderKeyPrefix}_icon_${iconName}`;
     if (png) {
-      registerImage(r, iconKey, png)
-      registeredIcons.add(iconKey)
+      registerImage(r, iconKey, png);
+      registeredIcons.add(iconKey);
     }
   }
 
   for (const item of items) {
-    const iconName = getLevelIconName(item)
-    const iconKey = `${renderKeyPrefix}_icon_${iconName}`
-    iconKeys.push(registeredIcons.has(iconKey) ? iconKey : null)
+    const iconName = getLevelIconName(item);
+    const iconKey = `${renderKeyPrefix}_icon_${iconName}`;
+    iconKeys.push(registeredIcons.has(iconKey) ? iconKey : null);
   }
 
   for (const item of extras) {
-    const iconName = getLevelIconName(item)
-    const iconKey = `${renderKeyPrefix}_icon_${iconName}`
-    extrasIconKeys.push(registeredIcons.has(iconKey) ? iconKey : null)
+    const iconName = getLevelIconName(item);
+    const iconKey = `${renderKeyPrefix}_icon_${iconName}`;
+    extrasIconKeys.push(registeredIcons.has(iconKey) ? iconKey : null);
   }
 
   // ===== 3. 构建布局 =====
-  const children: any[] = []
+  const children: any[] = [];
 
   // --- 背景 ---
   if (bgPng) {
@@ -516,7 +483,7 @@ export async function generateB20Image(
           height: canvasH
         }
       })
-    )
+    );
   }
 
   // --- 暗色蒙层 (main background-color: #0009 → 60% opacity) ---
@@ -531,7 +498,7 @@ export async function generateB20Image(
         backgroundColor: 'rgba(0,0,0,0.6)'
       }
     })
-  )
+  );
 
   // --- 头部渐变遮罩 (.cover: linear-gradient to top #000B) ---
   children.push(
@@ -545,39 +512,38 @@ export async function generateB20Image(
         backgroundColor: 'rgba(0,0,0,0.35)'
       }
     })
-  )
+  );
 
   // ===== 预加载星标图片 =====
-  const starCount =
-    result.starCount ?? calculateStars(result.allScores || items)
-  let starImageKey: string | null = null
+  const starCount = result.starCount ?? calculateStars(result.allScores || items);
+  let starImageKey: string | null = null;
   if (starCount > 0) {
-    const starPng = await loadAvifImage(`icons/${starCount}-star.avif`)
+    const starPng = await loadAvifImage(`icons/${starCount}-star.avif`);
     if (starPng) {
-      starImageKey = `${renderKeyPrefix}_star_${starCount}`
-      registerImage(r, starImageKey, starPng)
+      starImageKey = `${renderKeyPrefix}_star_${starCount}`;
+      registerImage(r, starImageKey, starPng);
     }
   }
 
   // ===== 预加载头像 =====
-  const AVATAR_SIZE = 80
-  let avatarImageKey: string | null = null
+  const AVATAR_SIZE = 80;
+  let avatarImageKey: string | null = null;
   try {
-    const avatarPath = path.join(assetsPath, 'assets', 'icons', 'avatar.webp')
-    const avatarData = new Uint8Array(await fs.readFile(avatarPath))
-    avatarImageKey = `${renderKeyPrefix}_avatar`
-    registerImage(r, avatarImageKey, avatarData)
+    const avatarPath = path.join(assetsPath, 'assets', 'icons', 'avatar.webp');
+    const avatarData = new Uint8Array(await fs.readFile(avatarPath));
+    avatarImageKey = `${renderKeyPrefix}_avatar`;
+    registerImage(r, avatarImageKey, avatarData);
   } catch {
     // avatar not available, skip
   }
 
   // ===== 预加载 v3 badge 背景图 =====
-  let v3BadgeImageKey: string | null = null
+  let v3BadgeImageKey: string | null = null;
   try {
-    const v3BgPath = path.join(assetsPath, 'assets', 'badges', 'v3-bg.webp')
-    const v3BgData = new Uint8Array(await fs.readFile(v3BgPath))
-    v3BadgeImageKey = `${renderKeyPrefix}_v3badge`
-    registerImage(r, v3BadgeImageKey, v3BgData)
+    const v3BgPath = path.join(assetsPath, 'assets', 'badges', 'v3-bg.webp');
+    const v3BgData = new Uint8Array(await fs.readFile(v3BgPath));
+    v3BadgeImageKey = `${renderKeyPrefix}_v3badge`;
+    registerImage(r, v3BadgeImageKey, v3BgData);
   } catch {
     // v3-bg.webp not available, fall back to flat color
   }
@@ -592,16 +558,16 @@ export async function generateB20Image(
     avatarImageKey,
     AVATAR_SIZE,
     v3BadgeImageKey
-  )
+  );
 
   // ===== B20 卡片 =====
-  const gridStartY = headerH
+  const gridStartY = headerH;
 
   for (let i = 0; i < b20Count; i++) {
-    const colIdx = i % cols
-    const rowIdx = Math.floor(i / cols)
-    const cardX = GRID_PAD_X + colIdx * (CARD_W + GRID_GAP)
-    const cardY = gridStartY + GRID_PAD_TOP + rowIdx * (CARD_H + GRID_GAP)
+    const colIdx = i % cols;
+    const rowIdx = Math.floor(i / cols);
+    const cardX = GRID_PAD_X + colIdx * (CARD_W + GRID_GAP);
+    const cardY = gridStartY + GRID_PAD_TOP + rowIdx * (CARD_H + GRID_GAP);
     buildCard(
       children,
       items[i],
@@ -612,21 +578,21 @@ export async function generateB20Image(
       iconKeys[i],
       result.averageRating,
       items
-    )
+    );
   }
 
   // ===== OVERFLOW 分割线 + 卡片 =====
   if (overflowCount > 0) {
-    const splitY = gridStartY + b20GridH
-    buildOverflowSplit(children, splitY)
+    const splitY = gridStartY + b20GridH;
+    buildOverflowSplit(children, splitY);
 
-    const overflowGridY = splitY + SPLIT_H
+    const overflowGridY = splitY + SPLIT_H;
     for (let i = 20; i < cardCount; i++) {
-      const oi = i - 20
-      const colIdx = oi % cols
-      const rowIdx = Math.floor(oi / cols)
-      const cardX = GRID_PAD_X + colIdx * (CARD_W + GRID_GAP)
-      const cardY = overflowGridY + rowIdx * (CARD_H + GRID_GAP)
+      const oi = i - 20;
+      const colIdx = oi % cols;
+      const rowIdx = Math.floor(oi / cols);
+      const cardX = GRID_PAD_X + colIdx * (CARD_W + GRID_GAP);
+      const cardY = overflowGridY + rowIdx * (CARD_H + GRID_GAP);
       buildCard(
         children,
         items[i],
@@ -637,21 +603,21 @@ export async function generateB20Image(
         iconKeys[i],
         result.averageRating,
         items
-      )
+      );
     }
   }
 
   // ===== EXTRAS 分割线 + 卡片 =====
   if (extrasCount > 0) {
-    const extrasSplitY = gridStartY + b20GridH + overflowH
-    buildExtrasSplit(children, extrasSplitY)
+    const extrasSplitY = gridStartY + b20GridH + overflowH;
+    buildExtrasSplit(children, extrasSplitY);
 
-    const extrasGridY = extrasSplitY + SPLIT_H
+    const extrasGridY = extrasSplitY + SPLIT_H;
     for (let i = 0; i < extrasCount; i++) {
-      const colIdx = i % cols
-      const rowIdx = Math.floor(i / cols)
-      const cardX = GRID_PAD_X + colIdx * (CARD_W + GRID_GAP)
-      const cardY = extrasGridY + rowIdx * (CARD_H + GRID_GAP)
+      const colIdx = i % cols;
+      const rowIdx = Math.floor(i / cols);
+      const cardX = GRID_PAD_X + colIdx * (CARD_W + GRID_GAP);
+      const cardY = extrasGridY + rowIdx * (CARD_H + GRID_GAP);
       buildCard(
         children,
         extras[i],
@@ -663,11 +629,11 @@ export async function generateB20Image(
         result.averageRating,
         items,
         'EX #'
-      )
+      );
     }
   }
 
-  buildFooter(children, canvasH, footerH)
+  buildFooter(children, canvasH, footerH);
 
   const root = container({
     children,
@@ -678,14 +644,14 @@ export async function generateB20Image(
       display: 'block',
       backgroundColor: '#191820'
     }
-  })
+  });
 
   const buffer = r.render(root, {
     width: CANVAS_W,
     height: canvasH,
     format: 'png'
-  })
-  return Buffer.from(buffer)
+  });
+  return Buffer.from(buffer);
 }
 
 function buildHeader(
@@ -698,27 +664,23 @@ function buildHeader(
   avatarSize: number,
   v3BadgeImageKey: string | null
 ) {
-  const username = userInfo?.username || userInfo?.nickname || 'UNKNOWN'
-  const starCount =
-    result.starCount ?? calculateStars(result.allScores || items)
-  const isRealityV3 = checkTop20V3Condition(items)
+  const username = userInfo?.username || userInfo?.nickname || 'UNKNOWN';
+  const starCount = result.starCount ?? calculateStars(result.allScores || items);
+  const isRealityV3 = checkTop20V3Condition(items);
 
   // 计算 Chart Progress
-  const progress =
-    result.chartProgress ?? calculateChartProgress(result.allScores || items)
+  const progress = result.chartProgress ?? calculateChartProgress(result.allScores || items);
 
   // 左上: 标题 h1 (2.5em ≈ 40px)
   children.push(
     container({
       style: { position: 'absolute', top: HEADER_PAD, left: HEADER_PAD },
-      children: [
-        textNode('Milthm Profiler', { fontSize: 40, color: '#ffffff' })
-      ]
+      children: [textNode('Milthm Profiler', { fontSize: 40, color: '#ffffff' })]
     })
-  )
+  );
 
   // 信息文本 (.texts, line-height 1.7em)
-  let infoY = HEADER_PAD + 58
+  let infoY = HEADER_PAD + 58;
   children.push(
     container({
       style: { position: 'absolute', top: infoY, left: HEADER_PAD + 3 },
@@ -729,35 +691,33 @@ function buildHeader(
         })
       ]
     })
-  )
-  infoY += 24
+  );
+  infoY += 24;
   children.push(
     container({
       style: { position: 'absolute', top: infoY, left: HEADER_PAD + 3 },
-      children: [
-        textNode('Chart Progress:', { fontSize: 14, color: '#ffffff' })
-      ]
+      children: [textNode('Chart Progress:', { fontSize: 14, color: '#ffffff' })]
     })
-  )
+  );
 
   // Chart Progress 详情 (两列四行: CL/CB 左列, SK/DZ 右列)
-  infoY += 22
+  infoY += 22;
   const categories: Array<{
-    key: keyof typeof progress
-    color: string
-    label: string
+    key: keyof typeof progress;
+    color: string;
+    label: string;
   }> = [
     { key: 'CL', color: '#A3A3A3', label: 'CL' },
     { key: 'CB', color: '#7A73ED', label: 'CB' },
     { key: 'SK', color: '#809EE7', label: 'SK' },
     { key: 'DZ', color: '#A3C8D0', label: 'DZ' }
-  ]
+  ];
 
   // 左列: CL, CB
   for (let ci = 0; ci < 2; ci++) {
-    const cat = categories[ci]
-    const p = progress[cat.key]
-    const rowY = infoY + ci * 22
+    const cat = categories[ci];
+    const p = progress[cat.key];
+    const rowY = infoY + ci * 22;
 
     // 色条 (.prog-line 5×18)
     children.push(
@@ -772,10 +732,10 @@ function buildHeader(
           borderRadius: 100
         }
       })
-    )
+    );
 
     // AP (紫色 #efbaff)
-    const apText = `AP ${p.ap}`
+    const apText = `AP ${p.ap}`;
     children.push(
       container({
         style: {
@@ -785,10 +745,10 @@ function buildHeader(
         },
         children: [textNode(apText, { fontSize: 12, color: '#efbaff' })]
       })
-    )
+    );
 
     // FC (蓝色 #84C9FA)
-    const fcText = `FC ${p.fc}`
+    const fcText = `FC ${p.fc}`;
     children.push(
       container({
         style: {
@@ -798,10 +758,10 @@ function buildHeader(
         },
         children: [textNode(fcText, { fontSize: 12, color: '#84C9FA' })]
       })
-    )
+    );
 
     // CL (灰色 #c4c4c4)
-    const clText = `CL ${p.cl}`
+    const clText = `CL ${p.cl}`;
     children.push(
       container({
         style: {
@@ -811,10 +771,10 @@ function buildHeader(
         },
         children: [textNode(clText, { fontSize: 12, color: '#c4c4c4' })]
       })
-    )
+    );
 
     // / total
-    const totalText = `/ ${p.all}`
+    const totalText = `/ ${p.all}`;
     children.push(
       container({
         style: {
@@ -824,15 +784,15 @@ function buildHeader(
         },
         children: [textNode(totalText, { fontSize: 12, color: '#ffffff' })]
       })
-    )
+    );
   }
 
   // 右列: SK, DZ
-  const rightColOffset = 260
+  const rightColOffset = 260;
   for (let ci = 0; ci < 2; ci++) {
-    const cat = categories[ci + 2]
-    const p = progress[cat.key]
-    const rowY = infoY + ci * 22
+    const cat = categories[ci + 2];
+    const p = progress[cat.key];
+    const rowY = infoY + ci * 22;
 
     // 色条
     children.push(
@@ -847,10 +807,10 @@ function buildHeader(
           borderRadius: 100
         }
       })
-    )
+    );
 
     // AP
-    const apText = `AP ${p.ap}`
+    const apText = `AP ${p.ap}`;
     children.push(
       container({
         style: {
@@ -860,10 +820,10 @@ function buildHeader(
         },
         children: [textNode(apText, { fontSize: 12, color: '#efbaff' })]
       })
-    )
+    );
 
     // FC
-    const fcText = `FC ${p.fc}`
+    const fcText = `FC ${p.fc}`;
     children.push(
       container({
         style: {
@@ -873,10 +833,10 @@ function buildHeader(
         },
         children: [textNode(fcText, { fontSize: 12, color: '#84C9FA' })]
       })
-    )
+    );
 
     // CL
-    const clText = `CL ${p.cl}`
+    const clText = `CL ${p.cl}`;
     children.push(
       container({
         style: {
@@ -886,10 +846,10 @@ function buildHeader(
         },
         children: [textNode(clText, { fontSize: 12, color: '#c4c4c4' })]
       })
-    )
+    );
 
     // / total
-    const totalText = `/ ${p.all}`
+    const totalText = `/ ${p.all}`;
     children.push(
       container({
         style: {
@@ -899,19 +859,17 @@ function buildHeader(
         },
         children: [textNode(totalText, { fontSize: 12, color: '#ffffff' })]
       })
-    )
+    );
   }
 
   // 具体 AP/FC/CL 数字统计行
-  infoY += 50
+  infoY += 50;
 
   // 右上: 用户名 (.name font-size 1.5em = 24px, text-align right)
-  const rightX = CANVAS_W - HEADER_PAD
+  const rightX = CANVAS_W - HEADER_PAD;
   // 头像占位: 头像在最右侧，用户名/Reality 在头像左侧
-  const avatarGap = 12
-  const rightContentX = avatarImageKey
-    ? rightX - avatarSize - avatarGap
-    : rightX
+  const avatarGap = 12;
+  const rightContentX = avatarImageKey ? rightX - avatarSize - avatarGap : rightX;
   children.push(
     container({
       style: {
@@ -921,20 +879,19 @@ function buildHeader(
       },
       children: [textNode(username, { fontSize: 24, color: '#ffffff' })]
     })
-  )
+  );
 
   // Reality 徽章 (flex row-reverse)
-  const realityY = HEADER_PAD + 40
-  const realityVal = result.averageRating.toFixed(2)
-  const realityNumW = estimateTextW(realityVal, 21)
-  const BADGE_FONT_SIZE = 14
-  const BADGE_H = 26
-  const realityBadgeW =
-    Math.ceil(estimateTextW('REALITY', BADGE_FONT_SIZE)) + 20
-  const realityTotalW = realityBadgeW + 13 + realityNumW
+  const realityY = HEADER_PAD + 40;
+  const realityVal = result.averageRating.toFixed(2);
+  const realityNumW = estimateTextW(realityVal, 21);
+  const BADGE_FONT_SIZE = 14;
+  const BADGE_H = 26;
+  const realityBadgeW = Math.ceil(estimateTextW('REALITY', BADGE_FONT_SIZE)) + 20;
+  const realityTotalW = realityBadgeW + 13 + realityNumW;
 
   // "REALITY" 圆角框 — V3 使用 v3-bg.webp 背景图，否则白底
-  const badgeLeft = rightContentX - realityTotalW
+  const badgeLeft = rightContentX - realityTotalW;
   if (isRealityV3 && v3BadgeImageKey) {
     // V3 样式: v3-bg.webp 背景图
     children.push(
@@ -955,7 +912,7 @@ function buildHeader(
           })
         ]
       })
-    )
+    );
     children.push(
       container({
         style: {
@@ -963,11 +920,9 @@ function buildHeader(
           left: badgeLeft + 10,
           top: realityY + Math.floor((BADGE_H - BADGE_FONT_SIZE) / 2) - 1
         },
-        children: [
-          textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#ffffff' })
-        ]
+        children: [textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#ffffff' })]
       })
-    )
+    );
   } else if (isRealityV3) {
     // V3 fallback: 紫色背景（图片未加载时）
     children.push(
@@ -982,7 +937,7 @@ function buildHeader(
           borderRadius: 999
         }
       })
-    )
+    );
     children.push(
       container({
         style: {
@@ -990,11 +945,9 @@ function buildHeader(
           left: badgeLeft + 10,
           top: realityY + Math.floor((BADGE_H - BADGE_FONT_SIZE) / 2) - 1
         },
-        children: [
-          textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#ffffff' })
-        ]
+        children: [textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#ffffff' })]
       })
-    )
+    );
   } else {
     // 普通样式: 白色背景
     children.push(
@@ -1009,7 +962,7 @@ function buildHeader(
           borderRadius: 999
         }
       })
-    )
+    );
     children.push(
       container({
         style: {
@@ -1017,11 +970,9 @@ function buildHeader(
           left: badgeLeft + 10,
           top: realityY + Math.floor((BADGE_H - BADGE_FONT_SIZE) / 2) - 1
         },
-        children: [
-          textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#000000' })
-        ]
+        children: [textNode('REALITY', { fontSize: BADGE_FONT_SIZE, color: '#000000' })]
       })
-    )
+    );
   }
 
   // Reality 数值 (.reality-text 1.3em, font-weight 600)
@@ -1034,11 +985,11 @@ function buildHeader(
       },
       children: [textNode(realityVal, { fontSize: 21, color: '#ffffff' })]
     })
-  )
+  );
 
   // 星标 (头像下方，与原位置一致，基于 rightX)
   if (starCount > 0 && starImageKey) {
-    const starImgW = 80
+    const starImgW = 80;
     children.push(
       image({
         src: starImageKey,
@@ -1049,13 +1000,13 @@ function buildHeader(
           width: starImgW
         }
       })
-    )
+    );
   }
 
   // TOP20 AVG + Date (基于 rightX，不受头像影响)
-  const rightInfoY = realityY + (starCount > 0 ? 60 : 35)
-  const avgText = `TOP20 AVG ${result.averageRating.toFixed(5)}`
-  const avgLeft = rightX - estimateTextW(avgText, 15)
+  const rightInfoY = realityY + (starCount > 0 ? 60 : 35);
+  const avgText = `TOP20 AVG ${result.averageRating.toFixed(5)}`;
+  const avgLeft = rightX - estimateTextW(avgText, 15);
   children.push(
     container({
       style: {
@@ -1065,10 +1016,10 @@ function buildHeader(
       },
       children: [textNode(avgText, { fontSize: 15, color: '#ffffff' })]
     })
-  )
+  );
 
-  const now = new Date()
-  const dateStr = `At ${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0]}`
+  const now = new Date();
+  const dateStr = `At ${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0]}`;
   children.push(
     container({
       style: {
@@ -1078,7 +1029,7 @@ function buildHeader(
       },
       children: [textNode(dateStr, { fontSize: 15, color: '#ffffff' })]
     })
-  )
+  );
 
   // 头像 (右上角, 圆形裁剪)
   if (avatarImageKey) {
@@ -1100,56 +1051,56 @@ function buildHeader(
           })
         ]
       })
-    )
+    );
   }
 }
 
 function calculateChartProgress(items: ProcessedScore[]): ChartProgress {
   // 从 constantData 获取各难度总谱面数
-  const constantData = loadConstantData()
+  const constantData = loadConstantData();
 
   const progress: ChartProgress = {
     CL: { all: 0, ap: 0, fc: 0, cl: 0 },
     CB: { all: 0, ap: 0, fc: 0, cl: 0 },
     SK: { all: 0, ap: 0, fc: 0, cl: 0 },
     DZ: { all: 0, ap: 0, fc: 0, cl: 0 }
-  }
+  };
 
   // 统计各难度总谱面数
   for (const [, entry] of constantData) {
-    const cat = entry.difficulty as string
+    const cat = entry.difficulty as string;
     if (cat === 'CL' || cat === 'CB' || cat === 'SK' || cat === 'DZ') {
-      progress[cat].all++
+      progress[cat].all++;
     }
   }
 
   // 统计用户成绩
   for (const item of items) {
-    const cat = item.category as string
-    if (cat !== 'CL' && cat !== 'CB' && cat !== 'SK' && cat !== 'DZ') continue
+    const cat = item.category as string;
+    if (cat !== 'CL' && cat !== 'CB' && cat !== 'SK' && cat !== 'DZ') continue;
 
     // CL (已通关): bestLevel !== 6
     if (item.bestLevel !== 6) {
-      progress[cat as keyof ChartProgress].cl++
+      progress[cat as keyof ChartProgress].cl++;
     }
     // AP: achievedStatus includes 5, 或 bestLevel === 0
     if (
       (Array.isArray(item.achievedStatus) && item.achievedStatus.includes(5)) ||
       item.bestLevel === 0
     ) {
-      progress[cat as keyof ChartProgress].ap++
-      progress[cat as keyof ChartProgress].fc++
+      progress[cat as keyof ChartProgress].ap++;
+      progress[cat as keyof ChartProgress].fc++;
     }
     // FC: achievedStatus includes 4, 或 bestLevel === 0
     else if (
       (Array.isArray(item.achievedStatus) && item.achievedStatus.includes(4)) ||
       item.bestLevel === 0
     ) {
-      progress[cat as keyof ChartProgress].fc++
+      progress[cat as keyof ChartProgress].fc++;
     }
   }
 
-  return progress
+  return progress;
 }
 
 function buildCard(
@@ -1164,7 +1115,7 @@ function buildCard(
   allItems: ProcessedScore[],
   rankPrefix = '#'
 ) {
-  const highlight = isV3Highlight(item)
+  const highlight = isV3Highlight(item);
 
   // --- 卡片阴影 (.cardcover box-shadow: 0 5px 5px #0b143377) ---
   children.push(
@@ -1179,7 +1130,7 @@ function buildCard(
         borderRadius: CARD_RADIUS
       }
     })
-  )
+  );
 
   // --- 卡片背景 (.cardcover) ---
   children.push(
@@ -1190,17 +1141,15 @@ function buildCard(
         top: cardY,
         width: CARD_W,
         height: CARD_H,
-        backgroundColor: highlight
-          ? 'rgba(47,46,77,0.85)'
-          : 'rgba(48,48,63,0.85)',
+        backgroundColor: highlight ? 'rgba(47,46,77,0.85)' : 'rgba(48,48,63,0.85)',
         borderRadius: CARD_RADIUS
       }
     })
-  )
+  );
 
   // --- 封面图 (.cardimgcover 204×115, 垂直居中) ---
-  const coverX = cardX + CARD_PAD
-  const coverY = cardY + (CARD_H - COVER_H) / 2
+  const coverX = cardX + CARD_PAD;
+  const coverY = cardY + (CARD_H - COVER_H) / 2;
   if (coverKey) {
     children.push(
       container({
@@ -1213,11 +1162,9 @@ function buildCard(
           borderRadius: COVER_RADIUS,
           overflow: 'hidden'
         },
-        children: [
-          image({ src: coverKey, style: { width: COVER_W, height: COVER_H } })
-        ]
+        children: [image({ src: coverKey, style: { width: COVER_W, height: COVER_H } })]
       })
-    )
+    );
   } else {
     children.push(
       container({
@@ -1231,19 +1178,17 @@ function buildCard(
           borderRadius: COVER_RADIUS
         }
       })
-    )
+    );
   }
 
   // --- 文字区坐标 ---
-  const textX = coverX + COVER_W + COVER_MR + TEXT_PAD
-  const textStartY = cardY + CARD_PAD
+  const textX = coverX + COVER_W + COVER_MR + TEXT_PAD;
+  const textStartY = cardY + CARD_PAD;
 
   // --- 排名号 #N (右上, text-align right) ---
-  const rankStr = `${rankPrefix}${index + 1}`
-  const rankColor = highlight
-    ? 'rgba(203,190,255,0.93)'
-    : 'rgba(221,227,255,0.79)'
-  const rankW = estimateTextW(rankStr, 14)
+  const rankStr = `${rankPrefix}${index + 1}`;
+  const rankColor = highlight ? 'rgba(203,190,255,0.93)' : 'rgba(221,227,255,0.79)';
+  const rankW = estimateTextW(rankStr, 14);
   children.push(
     container({
       style: {
@@ -1253,10 +1198,10 @@ function buildCard(
       },
       children: [textNode(rankStr, { fontSize: 14, color: rankColor })]
     })
-  )
+  );
 
   // --- Row 1: 类别色条 + 歌名 ---
-  const row1Y = textStartY + TEXT_PAD
+  const row1Y = textStartY + TEXT_PAD;
 
   // 色条 (6×18, border-radius 5)
   children.push(
@@ -1271,20 +1216,20 @@ function buildCard(
         borderRadius: 3
       }
     })
-  )
+  );
 
   // 歌名 (h4.cardtitle, font-weight normal)
-  const maxTitleLen = 21 - rankStr.length
-  const songName = limitText(item.name, maxTitleLen)
+  const maxTitleLen = 21 - rankStr.length;
+  const songName = limitText(item.name, maxTitleLen);
   children.push(
     container({
       style: { position: 'absolute', left: textX + CAT_BAR_W + 10, top: row1Y },
       children: [textNode(songName, { fontSize: 14, color: '#ffffff' })]
     })
-  )
+  );
 
   // --- Row 2: 段位图标 + 分数 (.gradetext 2em = 32px, flex) ---
-  const row2Y = row1Y + CAT_BAR_H + 9 // padding-bottom 9px on title row
+  const row2Y = row1Y + CAT_BAR_H + 9; // padding-bottom 9px on title row
 
   // 段位图标 (.grade max-width 50, margin -10)
   if (iconKey) {
@@ -1299,12 +1244,12 @@ function buildCard(
           height: GRADE_ICON_W
         }
       })
-    )
+    );
   }
 
   // 分数 (.score padding-left 10, font-size 2em = 32px)
-  const scoreStr = String(item.score).padStart(7, '0')
-  const scoreColor = getScoreColor(item)
+  const scoreStr = String(item.score).padStart(7, '0');
+  const scoreColor = getScoreColor(item);
   children.push(
     container({
       style: {
@@ -1314,22 +1259,21 @@ function buildCard(
       },
       children: [textNode(scoreStr, { fontSize: 28, color: scoreColor })]
     })
-  )
+  );
 
   // --- Row 3: 目标分 (font-size 0.9em ≈ 14px, margin-left 9, margin-bottom 5) ---
-  const row3Y = row2Y + 34
+  const row3Y = row2Y + 34;
 
   // 计算目标分 (与 web getCardHtml 逻辑一致)
-  const avg = averageRating
-  const item20Rating = allItems.length > 19 ? allItems[19].singleRating : 0
-  const ceilVal = Math.ceil(avg * 100 - 0.5) + 0.5
-  let targetScoreText: string
+  const avg = averageRating;
+  const item20Rating = allItems.length > 19 ? allItems[19].singleRating : 0;
+  const ceilVal = Math.ceil(avg * 100 - 0.5) + 0.5;
+  let targetScoreText: string;
   if (ceilVal !== avg * 100) {
-    const target =
-      (ceilVal - avg * 100) / 5 + Math.max(item.singleRating, item20Rating)
-    targetScoreText = `>> Goal: ${findScore(toDisplayNumber(item.constantv3), target)}`
+    const target = (ceilVal - avg * 100) / 5 + Math.max(item.singleRating, item20Rating);
+    targetScoreText = `>> Goal: ${findScore(toDisplayNumber(item.constantv3), target)}`;
   } else {
-    targetScoreText = '>> Goal: No remaining'
+    targetScoreText = '>> Goal: No remaining';
   }
 
   children.push(
@@ -1342,25 +1286,23 @@ function buildCard(
         })
       ]
     })
-  )
+  );
 
   // --- Row 4: 准确率 + rating (space-between, font-size 0.85em ≈ 13.6px) ---
-  const row4Y = row3Y + 19
-  const acc = `${(item.accuracy * 100 || 0).toFixed(2)}%`
+  const row4Y = row3Y + 19;
+  const acc = `${(item.accuracy * 100 || 0).toFixed(2)}%`;
   children.push(
     container({
       style: { position: 'absolute', left: textX + 3, top: row4Y },
-      children: [
-        textNode(acc, { fontSize: 12, color: 'rgba(255,255,255,0.84)' })
-      ]
+      children: [textNode(acc, { fontSize: 12, color: 'rgba(255,255,255,0.84)' })]
     })
-  )
+  );
 
   // rating (右对齐, V3 时为蓝色 #9ac9ff)
-  const constText = toDisplayNumber(item.constantv3).toFixed(1)
-  const ratingText = `${item.category} ${constText} > ${item.singleRating.toFixed(5)}`
-  const ratingColor = highlight ? '#9ac9ff' : 'rgba(255,255,255,0.84)'
-  const ratingW = estimateTextW(ratingText, 12)
+  const constText = toDisplayNumber(item.constantv3).toFixed(1);
+  const ratingText = `${item.category} ${constText} > ${item.singleRating.toFixed(5)}`;
+  const ratingColor = highlight ? '#9ac9ff' : 'rgba(255,255,255,0.84)';
+  const ratingW = estimateTextW(ratingText, 12);
   children.push(
     container({
       style: {
@@ -1370,7 +1312,7 @@ function buildCard(
       },
       children: [textNode(ratingText, { fontSize: 12, color: ratingColor })]
     })
-  )
+  );
 }
 
 function buildOverflowSplit(children: any[], splitY: number) {
@@ -1387,14 +1329,14 @@ function buildOverflowSplit(children: any[], splitY: number) {
         borderRadius: 3
       }
     })
-  )
+  );
   // "OVERFLOW" 文字 (h2, font-weight normal)
   children.push(
     container({
       style: { position: 'absolute', left: GRID_PAD_X + 34, top: splitY + 10 },
       children: [textNode('OVERFLOW', { fontSize: 22, color: '#d1d8ff' })]
     })
-  )
+  );
   // 横线 (hr: background-color #bbc5ff, height 4, border-radius 100)
   children.push(
     container({
@@ -1408,7 +1350,7 @@ function buildOverflowSplit(children: any[], splitY: number) {
         borderRadius: 2
       }
     })
-  )
+  );
 }
 
 function buildExtrasSplit(children: any[], splitY: number) {
@@ -1424,13 +1366,13 @@ function buildExtrasSplit(children: any[], splitY: number) {
         borderRadius: 3
       }
     })
-  )
+  );
   children.push(
     container({
       style: { position: 'absolute', left: GRID_PAD_X + 34, top: splitY + 10 },
       children: [textNode('EXTRAS', { fontSize: 22, color: '#d1d8ff' })]
     })
-  )
+  );
   children.push(
     container({
       style: {
@@ -1443,11 +1385,11 @@ function buildExtrasSplit(children: any[], splitY: number) {
         borderRadius: 2
       }
     })
-  )
+  );
 }
 
 function buildFooter(children: any[], canvasH: number, footerH: number) {
-  const footerY = canvasH - footerH
+  const footerY = canvasH - footerH;
 
   // 底部渐变遮罩 (footer: linear-gradient to bottom #0000→#000B)
   children.push(
@@ -1461,7 +1403,7 @@ function buildFooter(children: any[], canvasH: number, footerH: number) {
         backgroundColor: 'rgba(0,0,0,0.4)'
       }
     })
-  )
+  );
 
   // 主 footer 文字 - 第1行：生成器
   children.push(
@@ -1481,7 +1423,7 @@ function buildFooter(children: any[], canvasH: number, footerH: number) {
         )
       ]
     })
-  )
+  );
 
   // 主 footer 文字 - 第2行：主题
   children.push(
@@ -1501,10 +1443,10 @@ function buildFooter(children: any[], canvasH: number, footerH: number) {
         })
       ]
     })
-  )
+  );
 
   // UA 行 (模拟浏览器 UA)
-  const uaText = 'milthm-profiler (Koishi Plugin)'
+  const uaText = 'milthm-profiler (Koishi Plugin)';
   children.push(
     container({
       style: {
@@ -1515,16 +1457,14 @@ function buildFooter(children: any[], canvasH: number, footerH: number) {
         display: 'flex',
         justifyContent: 'center'
       },
-      children: [
-        textNode(uaText, { fontSize: 10, color: 'rgba(221,221,221,0.67)' })
-      ]
+      children: [textNode(uaText, { fontSize: 10, color: 'rgba(221,221,221,0.67)' })]
     })
-  )
+  );
 
   // Updated 时间戳行
-  const now = new Date()
-  const dateStr = `${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0]}`
-  const updatedText = `Updated at ${dateStr}`
+  const now = new Date();
+  const dateStr = `${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0]}`;
+  const updatedText = `Updated at ${dateStr}`;
   children.push(
     container({
       style: {
@@ -1535,25 +1475,23 @@ function buildFooter(children: any[], canvasH: number, footerH: number) {
         display: 'flex',
         justifyContent: 'center'
       },
-      children: [
-        textNode(updatedText, { fontSize: 10, color: 'rgba(221,221,221,0.67)' })
-      ]
+      children: [textNode(updatedText, { fontSize: 10, color: 'rgba(221,221,221,0.67)' })]
     })
-  )
+  );
 }
 
 function estimateTextW(str: string, fontSize: number): number {
-  let w = 0
+  let w = 0;
   for (const ch of str) {
-    const code = ch.charCodeAt(0)
+    const code = ch.charCodeAt(0);
     if (code > 255)
-      w += fontSize * 1.0 // CJK / emoji
-    else if (/[A-Z]/.test(ch) && ch !== 'I') w += fontSize * 0.7
-    else if (/[a-z]/.test(ch)) w += fontSize * 0.55
-    else if (/[0-9]/.test(ch)) w += fontSize * 0.6
-    else if (ch === ' ') w += fontSize * 0.3
-    else if (ch === '.') w += fontSize * 0.3
-    else w += fontSize * 0.55
+      w += fontSize * 1.0; // CJK / emoji
+    else if (/[A-Z]/.test(ch) && ch !== 'I') w += fontSize * 0.7;
+    else if (/[a-z]/.test(ch)) w += fontSize * 0.55;
+    else if (/[0-9]/.test(ch)) w += fontSize * 0.6;
+    else if (ch === ' ') w += fontSize * 0.3;
+    else if (ch === '.') w += fontSize * 0.3;
+    else w += fontSize * 0.55;
   }
-  return w
+  return w;
 }

@@ -7,18 +7,18 @@ declare module 'virtual:milthm-constants' {
     string,
     | (number | string | undefined)[]
     | {
-        constant?: number | string
-        constantv3?: number | string
-        category?: string
-        name?: string
-        yct?: number | string
+        constant?: number | string;
+        constantv3?: number | string;
+        category?: string;
+        name?: string;
+        yct?: number | string;
       }
-  >
-  export default data
+  >;
+  export default data;
 }
 
 declare module 'virtual:milthm-covers' {
   /** BeatmapId (chart_id) → WebP 文件名映射，来自 MilResource/resource/out.json */
-  const data: Record<string, string>
-  export default data
+  const data: Record<string, string>;
+  export default data;
 }
