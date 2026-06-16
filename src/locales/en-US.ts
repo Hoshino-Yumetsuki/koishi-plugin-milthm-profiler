@@ -15,6 +15,7 @@ export const enUS: Dict = {
       description: 'Fetch latest data (consumes daily download quota)',
       messages: {
         'auth-expired': 'Authorization expired. Please open the following link in your browser to re-authorize (valid for 5 minutes):',
+        'auth-link-text': 'Click here to authorize',
         'query-failed': 'Query failed: {message}',
         'pull-failed': 'Pull failed: {message}',
         'bind-success-but-pull-failed': 'Binding successful ({username}), but failed to pull data: {message}',

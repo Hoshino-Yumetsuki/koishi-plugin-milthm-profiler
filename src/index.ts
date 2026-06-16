@@ -24,7 +24,11 @@ export let logger: Logger;
 export const name = 'milthm-profiler';
 
 function sendAuthUrl(session: any, url: string) {
-  return session.send(session.platform === 'discord' ? `<${url}>` : url);
+  if (session.platform === 'discord') {
+    const text = session.text('.auth-link-text');
+    return session.send(`[${text}](${url})`);
+  }
+  return session.send(url);
 }
 
 export function apply(ctx: Context, config: Config) {

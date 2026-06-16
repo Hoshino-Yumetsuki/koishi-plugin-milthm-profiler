@@ -15,6 +15,7 @@ export const jaJP: Dict = {
       description: '最新データを取得（毎日のダウンロード回数を消費します）',
       messages: {
         'auth-expired': '認証の有効期限が切れました。ブラウザで以下のリンクを開いて再認証してください（5分間有効）：',
+        'auth-link-text': 'ここをクリックして認証',
         'query-failed': 'クエリ失敗: {message}',
         'pull-failed': '取得失敗: {message}',
         'bind-success-but-pull-failed': '連携成功（{username}）しましたが、データ取得に失敗しました: {message}',

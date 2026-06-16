@@ -15,6 +15,7 @@ export const zhCN: Dict = {
       description: '拉取最新数据（消耗每日下载次数）',
       messages: {
         'auth-expired': '授权已过期，请在浏览器中打开以下链接重新授权（5分钟内有效）：',
+        'auth-link-text': '点击此处完成授权',
         'query-failed': '查询失败: {message}',
         'pull-failed': '拉取失败: {message}',
         'bind-success-but-pull-failed': '绑定成功（{username}），但拉取数据失败: {message}',
