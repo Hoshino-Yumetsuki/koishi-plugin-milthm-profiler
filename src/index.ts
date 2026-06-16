@@ -15,13 +15,15 @@ import {
   getCachedResult
 } from './core';
 import type { NyaProfilerQueryResponse } from './types';
+import { zhCN } from './locales/zh-CN';
+import { enUS } from './locales/en-US';
+import { jaJP } from './locales/ja-JP';
 
 export let logger: Logger;
 
 export const name = 'milthm-profiler';
 
 function sendAuthUrl(session: any, url: string) {
-  // Discord needs <> wrapping to suppress embed preview and ensure clickability
   return session.send(session.platform === 'discord' ? `<${url}>` : url);
 }
 
@@ -30,6 +32,10 @@ export function apply(ctx: Context, config: Config) {
   setupLogger(config);
 
   setMainLogger(logger);
+
+  ctx.i18n.define('zh-CN', zhCN);
+  ctx.i18n.define('en-US', enUS);
+  ctx.i18n.define('ja-JP', jaJP);
 
   ctx.on('ready', async () => {
     initClients(ctx, config);
@@ -46,12 +52,12 @@ export function apply(ctx: Context, config: Config) {
       try {
         const binding = getLocalBinding(userId);
         if (!binding) {
-          return '未绑定 Milthm 账号，请先使用 milthm.update 命令进行授权绑定';
+          return session.text('.no-binding');
         }
 
         const cached = getCachedResult(userId);
         if (!cached) {
-          return '未找到本地缓存数据，请先使用 milthm.update 拉取数据';
+          return session.text('.no-cache');
         }
 
         logger.info('使用本地缓存生成查分图', {
@@ -80,10 +86,15 @@ export function apply(ctx: Context, config: Config) {
         await session.send(h.image(imageBuffer, 'image/png'));
 
         const cachedDate = new Date(cached.cachedAt).toLocaleString('zh-CN');
-        return `Rating: ${cached.averageRating.toFixed(4)}\n数据时间：${cachedDate}（使用 milthm.update 可拉取最新数据）`;
+        return session.text('.cached-result', {
+          rating: cached.averageRating.toFixed(4),
+          date: cachedDate
+        });
       } catch (error) {
         logger.error('查分失败', { error, userId });
-        return `查分失败: ${error instanceof Error ? error.message : String(error)}`;
+        return session.text('.query-failed', {
+          error: error instanceof Error ? error.message : String(error)
+        });
       }
     });
 
@@ -95,34 +106,29 @@ export function apply(ctx: Context, config: Config) {
       const userId = session.userId;
 
       try {
-        // 检查是否已绑定
         const binding = getLocalBinding(userId);
         if (binding) {
-          // 已绑定，直接查询最新数据
           logger.info('拉取最新数据', {
             userId,
             username: binding.milthmUsername
           });
           const response = await queryUserData(userId);
 
-          // 需要重新授权
           if (response.details?.needAuth) {
             let authUrl: string;
             let waitFn: () => Promise<{ username: string }>;
 
             if (response.details.url && response.details.uuid) {
-              // renya 已生成授权链接和 uuid，直接使用并轮询
               authUrl = response.details.url;
               const uuid = response.details.uuid;
               waitFn = () => registerAndWaitForAuth(userId, authUrl, uuid, config);
             } else {
-              // 需要自行生成新的授权链接
               const gen = await generateAuthUrlForUser(userId);
               authUrl = gen.url;
               waitFn = () => waitForAuthAndBind(userId, config);
             }
 
-            await session.send('授权已过期，请在浏览器中打开以下链接重新授权（5分钟内有效）：');
+            await session.send(session.text('.auth-expired'));
             await sendAuthUrl(session, authUrl);
 
             const { username } = await waitFn();
@@ -130,23 +136,22 @@ export function apply(ctx: Context, config: Config) {
 
             const retryResponse = await queryUserData(userId);
             if (retryResponse.result !== '200') {
-              return `查询失败: ${retryResponse.message}`;
+              return session.text('.query-failed', { message: retryResponse.message });
             }
             return await renderAndSend(session, retryResponse, username);
           }
 
           if (response.result !== '200') {
-            return `拉取失败: ${response.message}`;
+            return session.text('.pull-failed', { message: response.message });
           }
 
           return await renderAndSend(session, response, binding.milthmUsername);
         }
 
-        // 未绑定，触发完整授权流程
         const { url } = await generateAuthUrlForUser(userId);
         const targetUser = session.username ? `${session.username} (${userId})` : userId;
         await session.send(
-          `请在浏览器中打开以下链接完成授权绑定（5分钟内有效）：\n用户: ${targetUser}`
+          session.text('.auth-prompt', { target: targetUser })
         );
         await sendAuthUrl(session, url);
 
@@ -154,13 +159,18 @@ export function apply(ctx: Context, config: Config) {
 
         const response = await queryUserData(userId);
         if (response.result !== '200') {
-          return `绑定成功（${username}），但拉取数据失败: ${response.message}`;
+          return session.text('.bind-success-but-pull-failed', {
+            username,
+            message: response.message
+          });
         }
 
         return await renderAndSend(session, response, username);
       } catch (error) {
         logger.error('拉取数据失败', { error, userId });
-        return `拉取数据失败: ${error instanceof Error ? error.message : String(error)}`;
+        return session.text('.pull-failed-error', {
+          error: error instanceof Error ? error.message : String(error)
+        });
       }
     });
 
@@ -173,9 +183,9 @@ export function apply(ctx: Context, config: Config) {
       const cancelled = cancelAuthSession(userId);
 
       if (cancelled) {
-        return '已取消授权请求';
+        return session.text('.cancelled');
       } else {
-        return '当前没有进行中的授权请求';
+        return session.text('.none');
       }
     });
 
@@ -190,13 +200,15 @@ export function apply(ctx: Context, config: Config) {
         const { hadBinding } = logoutUser(userId);
 
         if (!hadBinding) {
-          return '当前没有已绑定的账号';
+          return session.text('.no-binding');
         }
 
-        return '已成功登出，绑定数据已清除。如需重新使用，请通过 milthm.update 重新授权。';
+        return session.text('.success');
       } catch (error) {
         logger.error('登出失败', { error, userId });
-        return `登出失败: ${error instanceof Error ? error.message : String(error)}`;
+        return session.text('.failed', {
+          error: error instanceof Error ? error.message : String(error)
+        });
       }
     });
 }
@@ -209,7 +221,7 @@ async function renderAndSend(
   const { best20, averageRating } = response.details;
 
   if (!best20 || best20.length === 0) {
-    return '未找到有效的成绩数据';
+    return session.text('.no-valid-scores');
   }
 
   logger.info('开始生成查分图片', { username });
@@ -234,7 +246,10 @@ async function renderAndSend(
   await session.send(h.image(imageBuffer, 'image/png'));
 
   const cachedDate = new Date().toLocaleString('zh-CN');
-  return `Rating: ${averageRating.toFixed(4)}\n数据时间：${cachedDate}`;
+  return session.text('.result-summary', {
+    rating: averageRating.toFixed(4),
+    date: cachedDate
+  });
 }
 
 function setupLogger(config: Config) {

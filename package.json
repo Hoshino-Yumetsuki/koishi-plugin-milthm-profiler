@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-milthm-profiler",
   "description": "Milthm 查分器",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "main": "lib/index.cjs",
   "module": "lib/index.mjs",
   "types": "lib/index.d.ts",
@@ -51,7 +51,9 @@
   },
   "koishi": {
     "description": {
-      "zh": "Milthm 查分器"
+      "zh": "Milthm 查分器",
+      "en": "Milthm Profiler",
+      "ja": "Milthm プロファイラー"
     }
   },
   "dependencies": {
