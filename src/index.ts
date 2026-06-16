@@ -25,9 +25,9 @@ export const name = 'milthm-profiler';
 
 function sendAuthUrl(session: any, url: string) {
   if (session.platform === 'discord') {
-    // Discord adapter escapes underscores in markdown links, mangling OAuth URLs.
-    // Use code block to preserve the URL verbatim for copy-paste.
-    return session.send(`\`\`\`\n${url}\n\`\`\``);
+    // Koishi string → element parsing escapes _ even inside code blocks.
+    // Use h('code') element directly to bypass string-level escaping.
+    return session.send(h('code', url));
   }
   return session.send(url);
 }
