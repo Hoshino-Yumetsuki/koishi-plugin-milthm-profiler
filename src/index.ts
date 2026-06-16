@@ -25,8 +25,9 @@ export const name = 'milthm-profiler';
 
 function sendAuthUrl(session: any, url: string) {
   if (session.platform === 'discord') {
-    const text = session.text('.auth-link-text');
-    return session.send(`[${text}](${url})`);
+    // Discord adapter escapes underscores in markdown links, mangling OAuth URLs.
+    // Use code block to preserve the URL verbatim for copy-paste.
+    return session.send(`\`\`\`\n${url}\n\`\`\``);
   }
   return session.send(url);
 }
