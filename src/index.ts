@@ -20,6 +20,11 @@ export let logger: Logger;
 
 export const name = 'milthm-profiler';
 
+function sendAuthUrl(session: any, url: string) {
+  // Discord needs <> wrapping to suppress embed preview and ensure clickability
+  return session.send(session.platform === 'discord' ? `<${url}>` : url);
+}
+
 export function apply(ctx: Context, config: Config) {
   logger = createLogger(ctx);
   setupLogger(config);
@@ -118,7 +123,7 @@ export function apply(ctx: Context, config: Config) {
             }
 
             await session.send('授权已过期，请在浏览器中打开以下链接重新授权（5分钟内有效）：');
-            await session.send(authUrl);
+            await sendAuthUrl(session, authUrl);
 
             const { username } = await waitFn();
             logger.info('重新授权成功', { userId, username });
@@ -143,7 +148,7 @@ export function apply(ctx: Context, config: Config) {
         await session.send(
           `请在浏览器中打开以下链接完成授权绑定（5分钟内有效）：\n用户: ${targetUser}`
         );
-        await session.send(url);
+        await sendAuthUrl(session, url);
 
         const { username } = await waitForAuthAndBind(userId, config);
 
