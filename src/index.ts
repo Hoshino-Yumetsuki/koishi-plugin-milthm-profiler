@@ -31,6 +31,40 @@ function sendAuthUrl(session: any, url: string) {
   return session.send(safe);
 }
 
+/** Map hardcoded Chinese error messages from core.ts / nya-profiler.ts to i18n keys. */
+const ERROR_MAP: Record<string, string> = {
+  'API 客户端未初始化': '.error-api-not-init',
+  '会话管理器未初始化': '.error-session-not-init',
+  '找不到用户的授权会话': '.error-session-not-found',
+  '未找到绑定记录，请先使用 milthm.update 命令授权绑定': '.error-no-binding',
+  '插件未初始化': '.error-plugin-not-init',
+  '用户拒绝了授权请求': '.error-auth-rejected',
+  '授权超时，用户未在规定时间内完成授权': '.error-auth-timeout',
+  '今日存档下载次数已达上限，请明天再试': '.error-daily-limit',
+  '生成授权链接响应解析失败，请开启 debug 日志查看详情': '.error-gen-auth-parse-failed',
+  '轮询授权状态响应解析失败，请开启 debug 日志查看详情': '.error-poll-parse-failed',
+  '查询用户数据响应解析失败，请开启 debug 日志查看详情': '.error-query-parse-failed',
+};
+
+/** Dynamic error patterns: [regex, i18n key, capture group name for {detail}] */
+const ERROR_PATTERNS: [RegExp, string][] = [
+  [/^生成授权链接失败: (.+)$/, '.error-gen-auth-failed'],
+  [/^轮询授权状态失败: (.+)$/, '.error-poll-failed'],
+  [/^查询用户数据失败: (.+)$/, '.error-query-failed-detail'],
+];
+
+function resolveErrorMessage(session: any, error: unknown): string {
+  const msg = error instanceof Error ? error.message : String(error);
+  // exact match
+  if (ERROR_MAP[msg]) return session.text(ERROR_MAP[msg]);
+  // dynamic patterns
+  for (const [pattern, key] of ERROR_PATTERNS) {
+    const m = msg.match(pattern);
+    if (m) return session.text(key, { detail: m[1] });
+  }
+  return msg;
+}
+
 export function apply(ctx: Context, config: Config) {
   logger = createLogger(ctx);
   setupLogger(config);
@@ -97,7 +131,7 @@ export function apply(ctx: Context, config: Config) {
       } catch (error) {
         logger.error('查分失败', { error, userId });
         return session.text('.query-failed', {
-          error: error instanceof Error ? error.message : String(error)
+          error: resolveErrorMessage(session, error)
         });
       }
     });
@@ -173,7 +207,7 @@ export function apply(ctx: Context, config: Config) {
       } catch (error) {
         logger.error('拉取数据失败', { error, userId });
         return session.text('.pull-failed-error', {
-          error: error instanceof Error ? error.message : String(error)
+          error: resolveErrorMessage(session, error)
         });
       }
     });
@@ -211,7 +245,7 @@ export function apply(ctx: Context, config: Config) {
       } catch (error) {
         logger.error('登出失败', { error, userId });
         return session.text('.failed', {
-          error: error instanceof Error ? error.message : String(error)
+          error: resolveErrorMessage(session, error)
         });
       }
     });
