@@ -24,12 +24,11 @@ export let logger: Logger;
 export const name = 'milthm-profiler';
 
 function sendAuthUrl(session: any, url: string) {
-  if (session.platform === 'discord') {
-    // Koishi string → element parsing escapes _ even inside code blocks.
-    // Use h('code') element directly to bypass string-level escaping.
-    return session.send(h('code', url));
-  }
-  return session.send(url);
+  // Koishi's Discord adapter escapes _ to \_ in all message content,
+  // which gets URL-encoded to %5C_ and breaks OAuth param names.
+  // Pre-encode _ as %5F: the server correctly decodes it back to _.
+  const safe = url.replace(/_/g, '%5F');
+  return session.send(safe);
 }
 
 export function apply(ctx: Context, config: Config) {
