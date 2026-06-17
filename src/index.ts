@@ -88,11 +88,13 @@ export function apply(ctx: Context, config: Config) {
     try {
       const binding = getLocalBinding(userId);
       if (!binding) {
+        session.milthmEphemeral = true;
         return session.text('.no-binding');
       }
 
       const cached = getCachedResult(userId);
       if (!cached) {
+        session.milthmEphemeral = true;
         return session.text('.no-cache');
       }
 
@@ -128,6 +130,7 @@ export function apply(ctx: Context, config: Config) {
       });
     } catch (error) {
       logger.error('查分失败', { error, userId });
+      session.milthmEphemeral = true;
       return session.text('.query-failed', {
         error: resolveErrorMessage(session, error)
       });
@@ -144,7 +147,7 @@ export function apply(ctx: Context, config: Config) {
 
   ctx
     .command('milthm.update', '拉取最新数据（消耗每日下载次数）')
-    .action(async ({ session }) => {
+    .action(async ({ session }: any) => {
       if (!session?.userId) return;
       const userId = session.userId;
       const acceptLanguage = getAcceptLanguage(session);
@@ -172,7 +175,9 @@ export function apply(ctx: Context, config: Config) {
               waitFn = () => waitForAuthAndBind(userId, config, acceptLanguage);
             }
 
+            session.milthmEphemeral = true;
             await session.send(session.text('.auth-expired'));
+            session.milthmEphemeral = true;
             await sendAuthUrl(session, authUrl);
 
             const { username } = await waitFn();
@@ -180,12 +185,14 @@ export function apply(ctx: Context, config: Config) {
 
             const retryResponse = await queryUserData(userId, acceptLanguage);
             if (retryResponse.result !== '200') {
+              session.milthmEphemeral = true;
               return session.text('.query-failed', { message: retryResponse.message });
             }
             return await renderAndSend(session, retryResponse, username);
           }
 
           if (response.result !== '200') {
+            session.milthmEphemeral = true;
             return session.text('.pull-failed', { message: response.message });
           }
 
@@ -194,15 +201,18 @@ export function apply(ctx: Context, config: Config) {
 
         const { url } = await generateAuthUrlForUser(userId, acceptLanguage);
         const targetUser = session.username ? `${session.username} (${userId})` : userId;
+        session.milthmEphemeral = true;
         await session.send(
           session.text('.auth-prompt', { target: targetUser })
         );
+        session.milthmEphemeral = true;
         await sendAuthUrl(session, url);
 
         const { username } = await waitForAuthAndBind(userId, config, acceptLanguage);
 
         const response = await queryUserData(userId, acceptLanguage);
         if (response.result !== '200') {
+          session.milthmEphemeral = true;
           return session.text('.bind-success-but-pull-failed', {
             username,
             message: response.message
@@ -212,6 +222,7 @@ export function apply(ctx: Context, config: Config) {
         return await renderAndSend(session, response, username);
       } catch (error) {
         logger.error('拉取数据失败', { error, userId });
+        session.milthmEphemeral = true;
         return session.text('.pull-failed-error', {
           error: resolveErrorMessage(session, error)
         });
@@ -220,21 +231,23 @@ export function apply(ctx: Context, config: Config) {
 
   ctx
     .command('milthm.cancel', '取消当前的授权请求')
-    .action(({ session }) => {
+    .action(({ session }: any) => {
       if (!session?.userId) return;
       const userId = session.userId;
       const cancelled = cancelAuthSession(userId);
 
       if (cancelled) {
+        session.milthmEphemeral = true;
         return session.text('.cancelled');
       } else {
+        session.milthmEphemeral = true;
         return session.text('.none');
       }
     });
 
   ctx
     .command('milthm.logout', '登出并清除本地绑定数据')
-    .action(({ session }) => {
+    .action(({ session }: any) => {
       if (!session?.userId) return;
       const userId = session.userId;
 
@@ -242,42 +255,35 @@ export function apply(ctx: Context, config: Config) {
         const { hadBinding } = logoutUser(userId);
 
         if (!hadBinding) {
+          session.milthmEphemeral = true;
           return session.text('.no-binding');
         }
 
+        session.milthmEphemeral = true;
         return session.text('.success');
       } catch (error) {
         logger.error('登出失败', { error, userId });
+        session.milthmEphemeral = true;
         return session.text('.failed', {
           error: resolveErrorMessage(session, error)
         });
       }
     });
 
-  // On Discord, make ALL plugin messages ephemeral (仅自己可见).
+  // On Discord, make auth prompts, auth URLs, and error messages ephemeral
+  // (仅自己可见). Results (images and summaries) remain public.
   //
-  // The adapter defers interactions without flags:64, locking the ephemeral
-  // state. We can't fix the defer retroactively, but followup messages (the
-  // actual responses) CAN be ephemeral. We patch the Discord message encoder
-  // to inject flags:64 into every message sent for our slash commands.
+  // We use a per-send flag on the session object: set `session.milthmEphemeral`
+  // to true before calling session.send() for auth/error messages. The encoder
+  // flush consumes the flag and injects flags:64 (Ephemeral) into the Discord
+  // API payload. Subsequent sends without the flag are public.
   setupDiscordEphemeral(ctx);
 }
 
 function setupDiscordEphemeral(ctx: Context) {
-  const ephemeralSessions = new WeakSet<object>();
-
-  // Step 1: Mark our command sessions as ephemeral in middleware
-  ctx.middleware((session, next) => {
-    if (session.platform === 'discord' && session.type === 'interaction/command') {
-      const cmd = session.event?.argv?.name;
-      if (cmd === 'milthm') {
-        ephemeralSessions.add(session);
-      }
-    }
-    return next();
-  });
-
-  // Step 2: Patch Discord message encoder to inject flags:64 for marked sessions
+  // Patch Discord message encoder to inject flags:64 when the session
+  // has milthmEphemeral set. The flag is consumed (deleted) after each
+  // flush, so only the intended message gets ephemeral treatment.
   const patchEncoder = (bot: any) => {
     if (bot.platform !== 'discord') return;
     const MessageEncoder = (bot.constructor as any).MessageEncoder;
@@ -286,8 +292,10 @@ function setupDiscordEphemeral(ctx: Context) {
 
     const origFlush = MessageEncoder.prototype.flush;
     MessageEncoder.prototype.flush = async function () {
-      if (ephemeralSessions.has(this.options?.session)) {
+      const s = this.options?.session;
+      if (s?.milthmEphemeral) {
         this.addition = { ...this.addition, flags: 64 };
+        delete s.milthmEphemeral;
       }
       return origFlush.call(this);
     };
@@ -305,6 +313,7 @@ async function renderAndSend(
   const { best20, averageRating } = response.details;
 
   if (!best20 || best20.length === 0) {
+    session.milthmEphemeral = true;
     return session.text('.no-valid-scores');
   }
 
