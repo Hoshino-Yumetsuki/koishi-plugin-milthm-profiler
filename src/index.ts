@@ -23,6 +23,13 @@ export let logger: Logger;
 
 export const name = 'milthm-profiler';
 
+/** Build Accept-Language header value from Koishi session locales */
+function getAcceptLanguage(session: any): string | undefined {
+  const locales: string[] | undefined = session?.locales;
+  if (!locales || locales.length === 0) return undefined;
+  return locales.join(', ');
+}
+
 function sendAuthUrl(session: any, url: string) {
   // Koishi's Discord adapter escapes _ to \_ in all message content,
   // which gets URL-encoded to %5C_ and breaks OAuth param names.
@@ -142,6 +149,7 @@ export function apply(ctx: Context, config: Config) {
     .action(async ({ session }) => {
       if (!session?.userId) return;
       const userId = session.userId;
+      const acceptLanguage = getAcceptLanguage(session);
 
       try {
         const binding = getLocalBinding(userId);
@@ -150,7 +158,7 @@ export function apply(ctx: Context, config: Config) {
             userId,
             username: binding.milthmUsername
           });
-          const response = await queryUserData(userId);
+          const response = await queryUserData(userId, acceptLanguage);
 
           if (response.details?.needAuth) {
             let authUrl: string;
@@ -159,11 +167,11 @@ export function apply(ctx: Context, config: Config) {
             if (response.details.url && response.details.uuid) {
               authUrl = response.details.url;
               const uuid = response.details.uuid;
-              waitFn = () => registerAndWaitForAuth(userId, authUrl, uuid, config);
+              waitFn = () => registerAndWaitForAuth(userId, authUrl, uuid, config, acceptLanguage);
             } else {
-              const gen = await generateAuthUrlForUser(userId);
+              const gen = await generateAuthUrlForUser(userId, acceptLanguage);
               authUrl = gen.url;
-              waitFn = () => waitForAuthAndBind(userId, config);
+              waitFn = () => waitForAuthAndBind(userId, config, acceptLanguage);
             }
 
             await session.send(session.text('.auth-expired'));
@@ -172,7 +180,7 @@ export function apply(ctx: Context, config: Config) {
             const { username } = await waitFn();
             logger.info('重新授权成功', { userId, username });
 
-            const retryResponse = await queryUserData(userId);
+            const retryResponse = await queryUserData(userId, acceptLanguage);
             if (retryResponse.result !== '200') {
               return session.text('.query-failed', { message: retryResponse.message });
             }
@@ -186,16 +194,16 @@ export function apply(ctx: Context, config: Config) {
           return await renderAndSend(session, response, binding.milthmUsername);
         }
 
-        const { url } = await generateAuthUrlForUser(userId);
+        const { url } = await generateAuthUrlForUser(userId, acceptLanguage);
         const targetUser = session.username ? `${session.username} (${userId})` : userId;
         await session.send(
           session.text('.auth-prompt', { target: targetUser })
         );
         await sendAuthUrl(session, url);
 
-        const { username } = await waitForAuthAndBind(userId, config);
+        const { username } = await waitForAuthAndBind(userId, config, acceptLanguage);
 
-        const response = await queryUserData(userId);
+        const response = await queryUserData(userId, acceptLanguage);
         if (response.result !== '200') {
           return session.text('.bind-success-but-pull-failed', {
             username,

@@ -6,6 +6,17 @@ import type {
 
 const NYA_PROFILER_BASE_URL = 'https://renya.mhtlim.top/api/external';
 
+function buildHeaders(apiKey: string, acceptLanguage?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    Referer: 'https://renya.mhtlim.top/'
+  };
+  if (acceptLanguage) {
+    headers['Accept-Language'] = acceptLanguage;
+  }
+  return headers;
+}
+
 export class NyaProfilerClient {
   constructor(
     private apiKey: string,
@@ -15,17 +26,14 @@ export class NyaProfilerClient {
   /**
    * 生成授权链接
    */
-  async generateAuthUrl(): Promise<{ url: string; uuid: string }> {
+  async generateAuthUrl(acceptLanguage?: string): Promise<{ url: string; uuid: string }> {
     const url = `${NYA_PROFILER_BASE_URL}/gen`;
 
     this.logger.debug('请求生成授权链接');
 
     try {
       const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          Referer: 'https://renya.mhtlim.top/'
-        }
+        headers: buildHeaders(this.apiKey, acceptLanguage)
       });
       const responseText = await response.text();
 
@@ -69,17 +77,14 @@ export class NyaProfilerClient {
   /**
    * 轮询授权状态（单次）
    */
-  async pollAuthStatus(uuid: string): Promise<{ status: string; username?: string }> {
+  async pollAuthStatus(uuid: string, acceptLanguage?: string): Promise<{ status: string; username?: string }> {
     const url = `${NYA_PROFILER_BASE_URL}/poll?` + `uuid=${encodeURIComponent(uuid)}`;
 
     this.logger.debug(`轮询授权状态: uuid=${uuid}`);
 
     try {
       const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          Referer: 'https://renya.mhtlim.top/'
-        }
+        headers: buildHeaders(this.apiKey, acceptLanguage)
       });
       const responseText = await response.text();
 
@@ -116,7 +121,8 @@ export class NyaProfilerClient {
   async waitForAuth(
     uuid: string,
     timeout: number = 300,
-    interval: number = 5
+    interval: number = 5,
+    acceptLanguage?: string
   ): Promise<{ username: string }> {
     const startTime = Date.now();
     const timeoutMs = timeout * 1000;
@@ -126,7 +132,7 @@ export class NyaProfilerClient {
 
     while (Date.now() - startTime < timeoutMs) {
       try {
-        const result = await this.pollAuthStatus(uuid);
+        const result = await this.pollAuthStatus(uuid, acceptLanguage);
 
         if (result.status === 'authorized' && result.username) {
           this.logger.info('用户已完成授权', { username: result.username });
@@ -154,17 +160,14 @@ export class NyaProfilerClient {
   /**
    * 查询用户数据（B20、rating 等）
    */
-  async queryUserData(username: string): Promise<NyaProfilerQueryResponse> {
+  async queryUserData(username: string, acceptLanguage?: string): Promise<NyaProfilerQueryResponse> {
     const url = `${NYA_PROFILER_BASE_URL}/query?` + `username=${encodeURIComponent(username)}`;
 
     this.logger.debug(`查询用户数据: username=${username}`);
 
     try {
       const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          Referer: 'https://renya.mhtlim.top/'
-        }
+        headers: buildHeaders(this.apiKey, acceptLanguage)
       });
       const responseText = await response.text();
 

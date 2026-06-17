@@ -156,7 +156,8 @@ export async function initClients(ctx: Context, config: Config) {
  * 生成授权链接
  */
 export async function generateAuthUrlForUser(
-  userId: string
+  userId: string,
+  acceptLanguage?: string
 ): Promise<{ url: string; uuid: string }> {
   if (!nyaProfilerClient) {
     throw new Error('API 客户端未初始化');
@@ -175,7 +176,7 @@ export async function generateAuthUrlForUser(
     };
   }
 
-  const { url, uuid } = await nyaProfilerClient.generateAuthUrl();
+  const { url, uuid } = await nyaProfilerClient.generateAuthUrl(acceptLanguage);
 
   sessionManager.createSession(userId, uuid, url);
 
@@ -192,7 +193,8 @@ export async function registerAndWaitForAuth(
   userId: string,
   url: string,
   uuid: string,
-  config: Config
+  config: Config,
+  acceptLanguage?: string
 ): Promise<{ username: string }> {
   if (!sessionManager) {
     throw new Error('会话管理器未初始化');
@@ -201,7 +203,7 @@ export async function registerAndWaitForAuth(
   // 注册到 sessionManager 以便 waitForAuthAndBind 能找到
   sessionManager.createSession(userId, uuid, url);
 
-  return await waitForAuthAndBind(userId, config);
+  return await waitForAuthAndBind(userId, config, acceptLanguage);
 }
 
 /**
@@ -209,7 +211,8 @@ export async function registerAndWaitForAuth(
  */
 export async function waitForAuthAndBind(
   userId: string,
-  config: Config
+  config: Config,
+  acceptLanguage?: string
 ): Promise<{ username: string }> {
   if (!nyaProfilerClient || !sessionManager || !koishiBaseDir) {
     throw new Error('API 客户端未初始化');
@@ -226,7 +229,8 @@ export async function waitForAuthAndBind(
     const { username } = await nyaProfilerClient.waitForAuth(
       session.uuid,
       config.pollTimeout,
-      config.pollInterval
+      config.pollInterval,
+      acceptLanguage
     );
 
     logger.info(`用户 ${userId} 已完成授权`, { milthmUsername: username });
@@ -256,7 +260,7 @@ export async function waitForAuthAndBind(
 /**
  * 查询用户数据（通过 renya 代理）并缓存结果
  */
-export async function queryUserData(userId: string): Promise<NyaProfilerQueryResponse> {
+export async function queryUserData(userId: string, acceptLanguage?: string): Promise<NyaProfilerQueryResponse> {
   if (!nyaProfilerClient || !koishiBaseDir) {
     throw new Error('API 客户端未初始化');
   }
@@ -266,7 +270,7 @@ export async function queryUserData(userId: string): Promise<NyaProfilerQueryRes
     throw new Error('未找到绑定记录，请先使用 milthm.update 命令授权绑定');
   }
 
-  const response = await nyaProfilerClient.queryUserData(binding.milthmUsername);
+  const response = await nyaProfilerClient.queryUserData(binding.milthmUsername, acceptLanguage);
 
   if (response.result === '200' && response.details) {
     saveCachedResult(koishiBaseDir, {
