@@ -259,7 +259,11 @@ export function apply(ctx: Context, config: Config) {
   // Discord's ephemeral state is locked in at the initial DEFERRED response.
   // The adapter defers unconditionally before dispatching interaction/command,
   // but it fires discord/interaction-create first — we intercept there.
-  (ctx as any).on('discord/interaction-create', (data: any, bot: any) => {
+  //
+  // CRITICAL: the event is emitted on bot.context via this.context.emit(),
+  // which is a sibling of the plugin context. cordis event propagation only
+  // goes UP to parent contexts, so we must use ctx.root to receive it.
+  (ctx.root as any).on('discord/interaction-create', (data: any, bot: any) => {
     if (data.type !== 2) return;
     const cmdName: string = data.data?.name;
     if (cmdName !== 'milthm' && cmdName !== 'mlt') return;
