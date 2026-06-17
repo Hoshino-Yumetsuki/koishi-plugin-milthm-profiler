@@ -253,32 +253,46 @@ export function apply(ctx: Context, config: Config) {
     });
 
   // On Discord, make ALL plugin messages ephemeral (仅自己可见).
-  // Without this, authorization links and other sensitive content would
-  // be visible to everyone in a channel.
   //
-  // Discord's ephemeral state is locked in at the initial DEFERRED response.
-  // The adapter defers unconditionally before dispatching interaction/command,
-  // but it fires discord/interaction-create first — we intercept there.
-  //
-  // CRITICAL: the event is emitted on bot.context via this.context.emit(),
-  // which is a sibling of the plugin context. cordis event propagation only
-  // goes UP to parent contexts, so we must use ctx.root to receive it.
-  (ctx.root as any).on('discord/interaction-create', (data: any, bot: any) => {
-    if (data.type !== 2) return;
-    const cmdName: string = data.data?.name;
-    if (cmdName !== 'milthm' && cmdName !== 'mlt') return;
+  // The adapter defers interactions without flags:64, locking the ephemeral
+  // state. We can't fix the defer retroactively, but followup messages (the
+  // actual responses) CAN be ephemeral. We patch the Discord message encoder
+  // to inject flags:64 into every message sent for our slash commands.
+  setupDiscordEphemeral(ctx);
+}
 
-    const orig = bot.internal.createInteractionResponse.bind(bot.internal);
-    bot.internal.createInteractionResponse = async function (id: string, token: string, params: any) {
-      if (params.type === 5) {
-        params.data = { ...params.data, flags: 64 };
+function setupDiscordEphemeral(ctx: Context) {
+  const ephemeralSessions = new WeakSet<object>();
+
+  // Step 1: Mark our command sessions as ephemeral in middleware
+  ctx.middleware((session, next) => {
+    if (session.platform === 'discord' && session.type === 'interaction/command') {
+      const cmd = session.event?.argv?.name;
+      if (cmd === 'milthm' || cmd === 'mlt') {
+        ephemeralSessions.add(session);
       }
-      return orig(id, token, params);
-    };
-    setImmediate(() => {
-      bot.internal.createInteractionResponse = orig;
-    });
+    }
+    return next();
   });
+
+  // Step 2: Patch Discord message encoder to inject flags:64 for marked sessions
+  const patchEncoder = (bot: any) => {
+    if (bot.platform !== 'discord') return;
+    const MessageEncoder = (bot.constructor as any).MessageEncoder;
+    if (!MessageEncoder || MessageEncoder.__milthmPatched) return;
+    MessageEncoder.__milthmPatched = true;
+
+    const origFlush = MessageEncoder.prototype.flush;
+    MessageEncoder.prototype.flush = async function () {
+      if (ephemeralSessions.has(this.options?.session)) {
+        this.addition = { ...this.addition, flags: 64 };
+      }
+      return origFlush.call(this);
+    };
+  };
+
+  for (const bot of ctx.bots) patchEncoder(bot);
+  ctx.on('bot-connect', patchEncoder);
 }
 
 async function renderAndSend(
