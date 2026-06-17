@@ -41,7 +41,7 @@ export const enUS: Dict = {
         'query-failed': 'Query failed: {message}',
         'pull-failed': 'Pull failed: {message}',
         'bind-success-but-pull-failed': 'Binding successful ({username}), but failed to pull data: {message}',
-        'auth-prompt': 'Please open the following link in your browser to complete authorization (valid for 5 minutes):\nUser: {target}',
+        'auth-prompt': 'Please open the following link in your browser to complete authorization for {target} (valid for 5 minutes):',
         'pull-failed-error': 'Failed to pull data: {error}',
         'result-summary': 'Rating: {rating}\nData time: {date}',
         'no-valid-scores': 'No valid score data found',

@@ -41,7 +41,7 @@ export const jaJP: Dict = {
         'query-failed': 'クエリ失敗: {message}',
         'pull-failed': '取得失敗: {message}',
         'bind-success-but-pull-failed': '連携成功（{username}）しましたが、データ取得に失敗しました: {message}',
-        'auth-prompt': 'ブラウザで以下のリンクを開いて認証連携を完了してください（5分間有効）：\nユーザー: {target}',
+        'auth-prompt': 'ブラウザで以下のリンクを開いて {target} の認証連携を完了してください（5分間有効）：',
         'pull-failed-error': 'データ取得に失敗しました: {error}',
         'result-summary': 'Rating: {rating}\nデータ時刻: {date}',
         'no-valid-scores': '有効なスコアデータが見つかりません',

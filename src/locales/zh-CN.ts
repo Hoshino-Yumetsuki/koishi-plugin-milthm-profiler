@@ -41,7 +41,7 @@ export const zhCN: Dict = {
         'query-failed': '查询失败: {message}',
         'pull-failed': '拉取失败: {message}',
         'bind-success-but-pull-failed': '绑定成功（{username}），但拉取数据失败: {message}',
-        'auth-prompt': '请在浏览器中打开以下链接完成授权绑定（5分钟内有效）：\n用户: {target}',
+        'auth-prompt': '请在浏览器中打开以下链接为 {target} 完成授权绑定（5分钟内有效）：',
         'pull-failed-error': '拉取数据失败: {error}',
         'result-summary': 'Rating: {rating}\n数据时间：{date}',
         'no-valid-scores': '未找到有效的成绩数据',
