@@ -257,6 +257,30 @@ export function apply(ctx: Context, config: Config) {
         });
       }
     });
+
+  // On Discord, make ALL plugin messages ephemeral (仅自己可见).
+  // Without this, authorization links and other sensitive content would
+  // be visible to everyone in a channel.
+  //
+  // Discord's ephemeral state is locked in at the initial DEFERRED response.
+  // The adapter defers unconditionally before dispatching interaction/command,
+  // but it fires discord/interaction-create first — we intercept there.
+  (ctx as any).on('discord/interaction-create', (data: any, bot: any) => {
+    if (data.type !== 2) return;
+    const cmdName: string = data.data?.name;
+    if (cmdName !== 'milthm' && cmdName !== 'mlt') return;
+
+    const orig = bot.internal.createInteractionResponse.bind(bot.internal);
+    bot.internal.createInteractionResponse = async function (id: string, token: string, params: any) {
+      if (params.type === 5) {
+        params.data = { ...params.data, flags: 64 };
+      }
+      return orig(id, token, params);
+    };
+    setImmediate(() => {
+      bot.internal.createInteractionResponse = orig;
+    });
+  });
 }
 
 async function renderAndSend(
