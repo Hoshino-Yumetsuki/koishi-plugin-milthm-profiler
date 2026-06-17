@@ -29,6 +29,10 @@ export const zhCN: Dict = {
         'cached-result': 'Rating: {rating}\n数据时间：{date}（使用 milthm.update 可拉取最新数据）',
       },
     },
+    'milthm.get': {
+      description: '查询已缓存的数据',
+      messages: {},
+    },
     'milthm.update': {
       description: '拉取最新数据（消耗每日下载次数）',
       messages: {

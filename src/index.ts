@@ -81,65 +81,69 @@ export function apply(ctx: Context, config: Config) {
     logger.info('Milthm Profiler 插件已就绪');
   });
 
+  const queryAction = async ({ session }: any) => {
+    if (!session?.userId) return;
+    const userId = session.userId;
+
+    try {
+      const binding = getLocalBinding(userId);
+      if (!binding) {
+        return session.text('.no-binding');
+      }
+
+      const cached = getCachedResult(userId);
+      if (!cached) {
+        return session.text('.no-cache');
+      }
+
+      logger.info('使用本地缓存生成查分图', {
+        userId,
+        username: cached.milthmUsername,
+        cachedAt: new Date(cached.cachedAt).toLocaleString('zh-CN')
+      });
+
+      const b20UserInfo = {
+        username: cached.milthmUsername,
+        nickname: cached.milthmUsername,
+        userId: ''
+      };
+
+      const b20Result = {
+        best20: cached.best20,
+        extras: cached.extras,
+        allScores: [] as any[],
+        averageRating: cached.averageRating,
+        totalScores: cached.totalScores,
+        starCount: cached.starCount,
+        chartProgress: cached.chartProgress
+      };
+
+      const imageBuffer = await generateB20Image(null, b20Result, b20UserInfo);
+      await session.send(h.image(imageBuffer, 'image/png'));
+
+      const cachedDate = new Date(cached.cachedAt).toLocaleString('zh-CN');
+      return session.text('.cached-result', {
+        rating: cached.averageRating.toFixed(4),
+        date: cachedDate
+      });
+    } catch (error) {
+      logger.error('查分失败', { error, userId });
+      return session.text('.query-failed', {
+        error: resolveErrorMessage(session, error)
+      });
+    }
+  };
+
   ctx
     .command('milthm', 'Milthm 查分器')
-    .alias('mlt')
-    .action(async ({ session }) => {
-      if (!session?.userId) return;
-      const userId = session.userId;
+    .action(queryAction);
 
-      try {
-        const binding = getLocalBinding(userId);
-        if (!binding) {
-          return session.text('.no-binding');
-        }
-
-        const cached = getCachedResult(userId);
-        if (!cached) {
-          return session.text('.no-cache');
-        }
-
-        logger.info('使用本地缓存生成查分图', {
-          userId,
-          username: cached.milthmUsername,
-          cachedAt: new Date(cached.cachedAt).toLocaleString('zh-CN')
-        });
-
-        const b20UserInfo = {
-          username: cached.milthmUsername,
-          nickname: cached.milthmUsername,
-          userId: ''
-        };
-
-        const b20Result = {
-          best20: cached.best20,
-          extras: cached.extras,
-          allScores: [] as any[],
-          averageRating: cached.averageRating,
-          totalScores: cached.totalScores,
-          starCount: cached.starCount,
-          chartProgress: cached.chartProgress
-        };
-
-        const imageBuffer = await generateB20Image(null, b20Result, b20UserInfo);
-        await session.send(h.image(imageBuffer, 'image/png'));
-
-        const cachedDate = new Date(cached.cachedAt).toLocaleString('zh-CN');
-        return session.text('.cached-result', {
-          rating: cached.averageRating.toFixed(4),
-          date: cachedDate
-        });
-      } catch (error) {
-        logger.error('查分失败', { error, userId });
-        return session.text('.query-failed', {
-          error: resolveErrorMessage(session, error)
-        });
-      }
-    });
+  ctx
+    .command('milthm.get', '查询已缓存的数据')
+    .action(queryAction);
 
   ctx
     .command('milthm.update', '拉取最新数据（消耗每日下载次数）')
-    .alias('mlt.update')
     .action(async ({ session }) => {
       if (!session?.userId) return;
       const userId = session.userId;
@@ -216,7 +220,6 @@ export function apply(ctx: Context, config: Config) {
 
   ctx
     .command('milthm.cancel', '取消当前的授权请求')
-    .alias('mlt.cancel')
     .action(({ session }) => {
       if (!session?.userId) return;
       const userId = session.userId;
@@ -231,7 +234,6 @@ export function apply(ctx: Context, config: Config) {
 
   ctx
     .command('milthm.logout', '登出并清除本地绑定数据')
-    .alias('mlt.logout')
     .action(({ session }) => {
       if (!session?.userId) return;
       const userId = session.userId;
@@ -268,7 +270,7 @@ function setupDiscordEphemeral(ctx: Context) {
   ctx.middleware((session, next) => {
     if (session.platform === 'discord' && session.type === 'interaction/command') {
       const cmd = session.event?.argv?.name;
-      if (cmd === 'milthm' || cmd === 'mlt') {
+      if (cmd === 'milthm') {
         ephemeralSessions.add(session);
       }
     }

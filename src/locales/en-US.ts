@@ -29,6 +29,10 @@ export const enUS: Dict = {
         'cached-result': 'Rating: {rating}\nData time: {date} (use milthm.update to fetch latest data)',
       },
     },
+    'milthm.get': {
+      description: 'Query cached data',
+      messages: {},
+    },
     'milthm.update': {
       description: 'Fetch latest data (consumes daily download quota)',
       messages: {

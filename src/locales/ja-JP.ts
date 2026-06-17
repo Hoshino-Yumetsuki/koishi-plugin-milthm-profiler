@@ -29,6 +29,10 @@ export const jaJP: Dict = {
         'cached-result': 'Rating: {rating}\nデータ時刻: {date}（milthm.update で最新データを取得できます）',
       },
     },
+    'milthm.get': {
+      description: 'キャッシュデータをクエリ',
+      messages: {},
+    },
     'milthm.update': {
       description: '最新データを取得（毎日のダウンロード回数を消費します）',
       messages: {
