@@ -1,6 +1,24 @@
 import type { Dict } from 'koishi'
 
 export const jaJP: Dict = {
+  errors: {
+    'api-client-not-init': 'API クライアントが初期化されていません',
+    'session-manager-not-init': 'セッションマネージャーが初期化されていません',
+    'plugin-not-init': 'プラグインが初期化されていません',
+    'auth-gen-http-failed': '認証リンクの生成に失敗しました: {detail}',
+    'auth-gen-parse-failed': '認証リンク生成レスポンスの解析に失敗しました。デバッグログを有効にしてください。',
+    'auth-gen-failed': '認証リンクの生成に失敗しました: {detail}',
+    'auth-poll-http-failed': '認証状態のポーリングに失敗しました: {detail}',
+    'auth-poll-parse-failed': 'ポーリングレスポンスの解析に失敗しました。デバッグログを有効にしてください。',
+    'auth-rejected': 'ユーザーが認証リクエストを拒否しました',
+    'auth-timeout': '認証がタイムアウトしました',
+    'auth-session-not-found': '認証セッションが見つかりません',
+    'binding-not-found': '連携記録が見つかりません。先に milthm.update で認証連携してください。',
+    'query-parse-failed': 'クエリレスポンスの解析に失敗しました。デバッグログを有効にしてください。',
+    'query-daily-limit': '本日のダウンロード回数が上限に達しました。明日もう一度お試しください。',
+    'query-failed': 'ユーザーデータのクエリに失敗しました: {detail}',
+    'unknown': '不明なエラー: {detail}',
+  },
   commands: {
     milthm: {
       description: 'Milthm プロファイラー',
@@ -23,20 +41,6 @@ export const jaJP: Dict = {
         'pull-failed-error': 'データ取得に失敗しました: {error}',
         'result-summary': 'Rating: {rating}\nデータ時刻: {date}',
         'no-valid-scores': '有効なスコアデータが見つかりません',
-        'error-api-not-init': 'API クライアントが初期化されていません',
-        'error-session-not-init': 'セッションマネージャーが初期化されていません',
-        'error-session-not-found': '認証セッションが見つかりません',
-        'error-no-binding': '連携記録が見つかりません。先に milthm.update で認証連携してください。',
-        'error-plugin-not-init': 'プラグインが初期化されていません',
-        'error-auth-rejected': 'ユーザーが認証リクエストを拒否しました',
-        'error-auth-timeout': '認証がタイムアウトしました。ユーザーが制限時間内に認証を完了しませんでした。',
-        'error-daily-limit': '本日のダウンロード回数が上限に達しました。明日もう一度お試しください。',
-        'error-gen-auth-failed': '認証リンクの生成に失敗しました: {detail}',
-        'error-poll-failed': '認証状態のポーリングに失敗しました: {detail}',
-        'error-query-failed-detail': 'ユーザーデータのクエリに失敗しました: {detail}',
-        'error-gen-auth-parse-failed': '認証リンク生成レスポンスの解析に失敗しました。デバッグログを有効にしてください。',
-        'error-poll-parse-failed': 'ポーリングレスポンスの解析に失敗しました。デバッグログを有効にしてください。',
-        'error-query-parse-failed': 'クエリレスポンスの解析に失敗しました。デバッグログを有効にしてください。',
       },
     },
     'milthm.cancel': {

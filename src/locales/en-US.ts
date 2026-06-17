@@ -1,6 +1,24 @@
 import type { Dict } from 'koishi'
 
 export const enUS: Dict = {
+  errors: {
+    'api-client-not-init': 'API client not initialized',
+    'session-manager-not-init': 'Session manager not initialized',
+    'plugin-not-init': 'Plugin not initialized',
+    'auth-gen-http-failed': 'Failed to generate authorization URL: {detail}',
+    'auth-gen-parse-failed': 'Failed to parse authorization response. Enable debug logging for details.',
+    'auth-gen-failed': 'Failed to generate authorization URL: {detail}',
+    'auth-poll-http-failed': 'Failed to poll authorization status: {detail}',
+    'auth-poll-parse-failed': 'Failed to parse polling response. Enable debug logging for details.',
+    'auth-rejected': 'User rejected the authorization request',
+    'auth-timeout': 'Authorization timed out',
+    'auth-session-not-found': 'Authorization session not found',
+    'binding-not-found': 'No binding record found. Please use milthm.update to authorize and link first.',
+    'query-parse-failed': 'Failed to parse query response. Enable debug logging for details.',
+    'query-daily-limit': 'Daily download limit reached. Please try again tomorrow.',
+    'query-failed': 'Failed to query user data: {detail}',
+    'unknown': 'Unknown error: {detail}',
+  },
   commands: {
     milthm: {
       description: 'Milthm Profiler',
@@ -23,20 +41,6 @@ export const enUS: Dict = {
         'pull-failed-error': 'Failed to pull data: {error}',
         'result-summary': 'Rating: {rating}\nData time: {date}',
         'no-valid-scores': 'No valid score data found',
-        'error-api-not-init': 'API client not initialized',
-        'error-session-not-init': 'Session manager not initialized',
-        'error-session-not-found': 'Authorization session not found',
-        'error-no-binding': 'No binding record found. Please use milthm.update to authorize and link first.',
-        'error-plugin-not-init': 'Plugin not initialized',
-        'error-auth-rejected': 'User rejected the authorization request',
-        'error-auth-timeout': 'Authorization timed out',
-        'error-daily-limit': 'Daily download limit reached. Please try again tomorrow.',
-        'error-gen-auth-failed': 'Failed to generate authorization URL: {detail}',
-        'error-poll-failed': 'Failed to poll authorization status: {detail}',
-        'error-query-failed-detail': 'Failed to query user data: {detail}',
-        'error-gen-auth-parse-failed': 'Failed to parse authorization response. Enable debug logging for details.',
-        'error-poll-parse-failed': 'Failed to parse polling response. Enable debug logging for details.',
-        'error-query-parse-failed': 'Failed to parse query response. Enable debug logging for details.',
       },
     },
     'milthm.cancel': {

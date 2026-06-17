@@ -4,6 +4,7 @@ import { NyaProfilerClient } from './api/nya-profiler';
 import { SessionManager } from './utils/session';
 import { setB20AssetsPath } from './renderer/image';
 import type { NyaProfilerQueryResponse, ProcessedScore, ChartProgress } from './types';
+import { MilthmErrorCode } from './errors';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -160,11 +161,11 @@ export async function generateAuthUrlForUser(
   acceptLanguage?: string
 ): Promise<{ url: string; uuid: string }> {
   if (!nyaProfilerClient) {
-    throw new Error('API 客户端未初始化');
+    throw new Error(MilthmErrorCode.API_CLIENT_NOT_INIT);
   }
 
   if (!sessionManager) {
-    throw new Error('会话管理器未初始化');
+    throw new Error(MilthmErrorCode.SESSION_MANAGER_NOT_INIT);
   }
 
   const existingSession = sessionManager.getSession(userId);
@@ -197,7 +198,7 @@ export async function registerAndWaitForAuth(
   acceptLanguage?: string
 ): Promise<{ username: string }> {
   if (!sessionManager) {
-    throw new Error('会话管理器未初始化');
+    throw new Error(MilthmErrorCode.SESSION_MANAGER_NOT_INIT);
   }
 
   // 注册到 sessionManager 以便 waitForAuthAndBind 能找到
@@ -215,12 +216,12 @@ export async function waitForAuthAndBind(
   acceptLanguage?: string
 ): Promise<{ username: string }> {
   if (!nyaProfilerClient || !sessionManager || !koishiBaseDir) {
-    throw new Error('API 客户端未初始化');
+    throw new Error(MilthmErrorCode.API_CLIENT_NOT_INIT);
   }
 
   const session = sessionManager.getSession(userId);
   if (!session) {
-    throw new Error('找不到用户的授权会话');
+    throw new Error(MilthmErrorCode.AUTH_SESSION_NOT_FOUND);
   }
 
   logger.info(`开始等待用户 ${userId} 完成授权`);
@@ -247,7 +248,7 @@ export async function waitForAuthAndBind(
   } catch (error) {
     logger.error(`用户 ${userId} 授权流程失败`, { error });
 
-    if (error instanceof Error && error.message?.includes('授权超时')) {
+    if (error instanceof Error && error.message === MilthmErrorCode.AUTH_TIMEOUT) {
       sessionManager.updateSessionStatus(userId, 'timeout');
     } else {
       sessionManager.updateSessionStatus(userId, 'failed');
@@ -262,12 +263,12 @@ export async function waitForAuthAndBind(
  */
 export async function queryUserData(userId: string, acceptLanguage?: string): Promise<NyaProfilerQueryResponse> {
   if (!nyaProfilerClient || !koishiBaseDir) {
-    throw new Error('API 客户端未初始化');
+    throw new Error(MilthmErrorCode.API_CLIENT_NOT_INIT);
   }
 
   const binding = loadBinding(koishiBaseDir, userId);
   if (!binding) {
-    throw new Error('未找到绑定记录，请先使用 milthm.update 命令授权绑定');
+    throw new Error(MilthmErrorCode.BINDING_NOT_FOUND);
   }
 
   const response = await nyaProfilerClient.queryUserData(binding.milthmUsername, acceptLanguage);
@@ -329,7 +330,7 @@ export function cancelAuthSession(userId: string): boolean {
  */
 export function logoutUser(userId: string): { hadBinding: boolean } {
   if (!koishiBaseDir) {
-    throw new Error('插件未初始化');
+    throw new Error(MilthmErrorCode.PLUGIN_NOT_INIT);
   }
 
   if (sessionManager) {

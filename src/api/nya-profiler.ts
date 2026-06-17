@@ -3,6 +3,7 @@ import type {
   NyaProfilerPollResponse,
   NyaProfilerQueryResponse
 } from '../types';
+import { MilthmErrorCode } from '../errors';
 
 const NYA_PROFILER_BASE_URL = 'https://renya.mhtlim.top/api/external';
 
@@ -43,7 +44,7 @@ export class NyaProfilerClient {
           headers: Object.fromEntries(response.headers.entries()),
           body: responseText
         });
-        throw new Error(`生成授权链接失败: HTTP ${response.status}`);
+        throw new Error(`${MilthmErrorCode.AUTH_GEN_HTTP_FAILED}:${response.status}`);
       }
 
       let data: NyaProfilerGenResponse;
@@ -51,12 +52,12 @@ export class NyaProfilerClient {
         data = JSON.parse(responseText);
       } catch {
         this.logger.debug({ status: response.status, body: responseText });
-        throw new Error('生成授权链接响应解析失败，请开启 debug 日志查看详情');
+        throw new Error(MilthmErrorCode.AUTH_GEN_PARSE_FAILED);
       }
 
       if (data.result !== '200') {
         this.logger.debug({ body: responseText });
-        throw new Error(`生成授权链接失败: ${data.message}`);
+        throw new Error(`${MilthmErrorCode.AUTH_GEN_FAILED}:${data.message}`);
       }
 
       this.logger.debug('成功生成授权链接', {
@@ -94,7 +95,7 @@ export class NyaProfilerClient {
           headers: Object.fromEntries(response.headers.entries()),
           body: responseText
         });
-        throw new Error(`轮询授权状态失败: HTTP ${response.status}`);
+        throw new Error(`${MilthmErrorCode.AUTH_POLL_HTTP_FAILED}:${response.status}`);
       }
 
       let data: NyaProfilerPollResponse;
@@ -102,7 +103,7 @@ export class NyaProfilerClient {
         data = JSON.parse(responseText);
       } catch {
         this.logger.debug({ status: response.status, body: responseText });
-        throw new Error('轮询授权状态响应解析失败，请开启 debug 日志查看详情');
+        throw new Error(MilthmErrorCode.AUTH_POLL_PARSE_FAILED);
       }
 
       return {
@@ -140,13 +141,13 @@ export class NyaProfilerClient {
         }
 
         if (result.status === 'rejected') {
-          throw new Error('用户拒绝了授权请求');
+          throw new Error(MilthmErrorCode.AUTH_REJECTED);
         }
 
         // pending or pending_consent - keep waiting
         await new Promise((resolve) => setTimeout(resolve, intervalMs));
       } catch (error) {
-        if (error instanceof Error && error.message === '用户拒绝了授权请求') {
+        if (error instanceof Error && error.message === MilthmErrorCode.AUTH_REJECTED) {
           throw error;
         }
         this.logger.error('轮询过程中发生错误', { error });
@@ -154,7 +155,7 @@ export class NyaProfilerClient {
       }
     }
 
-    throw new Error('授权超时，用户未在规定时间内完成授权');
+    throw new Error(MilthmErrorCode.AUTH_TIMEOUT);
   }
 
   /**
@@ -176,7 +177,7 @@ export class NyaProfilerClient {
         data = JSON.parse(responseText);
       } catch {
         this.logger.debug({ status: response.status, body: responseText });
-        throw new Error('查询用户数据响应解析失败，请开启 debug 日志查看详情');
+        throw new Error(MilthmErrorCode.QUERY_PARSE_FAILED);
       }
 
       // 401 with needAuth means token expired, need re-authorization
@@ -197,9 +198,9 @@ export class NyaProfilerClient {
         }
         if (response.status === 429) {
           this.logger.warn('今日下载次数已达上限', { username });
-          throw new Error('今日存档下载次数已达上限，请明天再试');
+          throw new Error(MilthmErrorCode.QUERY_DAILY_LIMIT);
         }
-        throw new Error(`查询用户数据失败: ${data.message}`);
+        throw new Error(`${MilthmErrorCode.QUERY_FAILED}:${data.message}`);
       }
 
       this.logger.debug('成功查询用户数据', {
