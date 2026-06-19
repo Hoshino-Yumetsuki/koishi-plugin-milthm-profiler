@@ -31,7 +31,12 @@ export const jaJP: Dict = {
     },
     'milthm.get': {
       description: 'キャッシュデータをクエリ',
-      messages: {},
+      messages: {
+        'no-binding': 'Milthm アカウントが紐付けられていません。先に milthm.update で認証連携してください。',
+        'no-cache': 'ローカルキャッシュが見つかりません。先に milthm.update でデータを取得してください。',
+        'query-failed': 'クエリ失敗: {error}',
+        'result-summary': 'Rating: {rating}\nデータ時刻: {date}',
+      },
     },
     'milthm.update': {
       description: '最新データを取得（毎日のダウンロード回数を消費します）',

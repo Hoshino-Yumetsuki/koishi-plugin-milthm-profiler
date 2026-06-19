@@ -31,7 +31,12 @@ export const zhCN: Dict = {
     },
     'milthm.get': {
       description: '查询已缓存的数据',
-      messages: {},
+      messages: {
+        'no-binding': '未绑定 Milthm 账号，请先使用 milthm.update 命令进行授权绑定',
+        'no-cache': '未找到本地缓存数据，请先使用 milthm.update 拉取数据',
+        'query-failed': '查分失败: {error}',
+        'result-summary': 'Rating: {rating}\n数据时间：{date}',
+      },
     },
     'milthm.update': {
       description: '拉取最新数据（消耗每日下载次数）',
