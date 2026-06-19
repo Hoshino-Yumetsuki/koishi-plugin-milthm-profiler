@@ -26,7 +26,7 @@ export const enUS: Dict = {
         'no-binding': 'Milthm account not linked. Please use milthm.update to authorize and link first.',
         'no-cache': 'No local cache found. Please use milthm.update to fetch data first.',
         'query-failed': 'Query failed: {error}',
-        'cached-result': 'Rating: {rating}\nData time: {date} (use milthm.update to fetch latest data)',
+        'result-summary': 'Rating: {rating}\nData time: {date}',
       },
     },
     'milthm.get': {

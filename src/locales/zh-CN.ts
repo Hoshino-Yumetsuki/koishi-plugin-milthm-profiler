@@ -26,7 +26,7 @@ export const zhCN: Dict = {
         'no-binding': '未绑定 Milthm 账号，请先使用 milthm.update 命令进行授权绑定',
         'no-cache': '未找到本地缓存数据，请先使用 milthm.update 拉取数据',
         'query-failed': '查分失败: {error}',
-        'cached-result': 'Rating: {rating}\n数据时间：{date}（使用 milthm.update 可拉取最新数据）',
+        'result-summary': 'Rating: {rating}\n数据时间：{date}',
       },
     },
     'milthm.get': {

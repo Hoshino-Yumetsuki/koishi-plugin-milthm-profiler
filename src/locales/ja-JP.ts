@@ -26,7 +26,7 @@ export const jaJP: Dict = {
         'no-binding': 'Milthm アカウントが紐付けられていません。先に milthm.update で認証連携してください。',
         'no-cache': 'ローカルキャッシュが見つかりません。先に milthm.update でデータを取得してください。',
         'query-failed': 'クエリ失敗: {error}',
-        'cached-result': 'Rating: {rating}\nデータ時刻: {date}（milthm.update で最新データを取得できます）',
+        'result-summary': 'Rating: {rating}\nデータ時刻: {date}',
       },
     },
     'milthm.get': {

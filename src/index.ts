@@ -124,7 +124,7 @@ export function apply(ctx: Context, config: Config) {
       await session.send(h.image(imageBuffer, 'image/png'));
 
       const cachedDate = new Date(cached.cachedAt).toLocaleString('zh-CN');
-      return session.text('.cached-result', {
+      return session.text('.result-summary', {
         rating: cached.averageRating.toFixed(4),
         date: cachedDate
       });
