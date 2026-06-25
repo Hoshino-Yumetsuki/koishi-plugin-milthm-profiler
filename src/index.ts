@@ -44,7 +44,7 @@ const DETAIL_CODES = new Set([
   MilthmErrorCode.AUTH_GEN_HTTP_FAILED,
   MilthmErrorCode.AUTH_GEN_FAILED,
   MilthmErrorCode.AUTH_POLL_HTTP_FAILED,
-  MilthmErrorCode.QUERY_FAILED,
+  MilthmErrorCode.QUERY_FAILED
 ]);
 
 function resolveErrorMessage(session: any, error: unknown): string {
@@ -77,7 +77,7 @@ export function apply(ctx: Context, config: Config) {
   ctx.i18n.define('ja-JP', jaJP);
 
   ctx.on('ready', async () => {
-    initClients(ctx, config);
+    void initClients(ctx, config);
     logger.info('Milthm Profiler 插件已就绪');
   });
 
@@ -137,13 +137,9 @@ export function apply(ctx: Context, config: Config) {
     }
   };
 
-  ctx
-    .command('milthm', 'Milthm 查分器')
-    .action(queryAction);
+  ctx.command('milthm', 'Milthm 查分器').action(queryAction);
 
-  ctx
-    .command('milthm.get', '查询已缓存的数据')
-    .action(queryAction);
+  ctx.command('milthm.get', '查询已缓存的数据').action(queryAction);
 
   ctx
     .command('milthm.update', '拉取最新数据（消耗每日下载次数）')
@@ -202,9 +198,7 @@ export function apply(ctx: Context, config: Config) {
         const { url } = await generateAuthUrlForUser(userId, acceptLanguage);
         const targetUser = session.username ? `${session.username} (${userId})` : userId;
         session.milthmEphemeral = true;
-        await session.send(
-          session.text('.auth-prompt', { target: targetUser })
-        );
+        await session.send(session.text('.auth-prompt', { target: targetUser }));
         session.milthmEphemeral = true;
         await sendAuthUrl(session, url);
 
@@ -229,46 +223,42 @@ export function apply(ctx: Context, config: Config) {
       }
     });
 
-  ctx
-    .command('milthm.cancel', '取消当前的授权请求')
-    .action(({ session }: any) => {
-      if (!session?.userId) return;
-      const userId = session.userId;
-      const cancelled = cancelAuthSession(userId);
+  ctx.command('milthm.cancel', '取消当前的授权请求').action(({ session }: any) => {
+    if (!session?.userId) return;
+    const userId = session.userId;
+    const cancelled = cancelAuthSession(userId);
 
-      if (cancelled) {
+    if (cancelled) {
+      session.milthmEphemeral = true;
+      return session.text('.cancelled');
+    } else {
+      session.milthmEphemeral = true;
+      return session.text('.none');
+    }
+  });
+
+  ctx.command('milthm.logout', '登出并清除本地绑定数据').action(({ session }: any) => {
+    if (!session?.userId) return;
+    const userId = session.userId;
+
+    try {
+      const { hadBinding } = logoutUser(userId);
+
+      if (!hadBinding) {
         session.milthmEphemeral = true;
-        return session.text('.cancelled');
-      } else {
-        session.milthmEphemeral = true;
-        return session.text('.none');
+        return session.text('.no-binding');
       }
-    });
 
-  ctx
-    .command('milthm.logout', '登出并清除本地绑定数据')
-    .action(({ session }: any) => {
-      if (!session?.userId) return;
-      const userId = session.userId;
-
-      try {
-        const { hadBinding } = logoutUser(userId);
-
-        if (!hadBinding) {
-          session.milthmEphemeral = true;
-          return session.text('.no-binding');
-        }
-
-        session.milthmEphemeral = true;
-        return session.text('.success');
-      } catch (error) {
-        logger.error('登出失败', { error, userId });
-        session.milthmEphemeral = true;
-        return session.text('.failed', {
-          error: resolveErrorMessage(session, error)
-        });
-      }
-    });
+      session.milthmEphemeral = true;
+      return session.text('.success');
+    } catch (error) {
+      logger.error('登出失败', { error, userId });
+      session.milthmEphemeral = true;
+      return session.text('.failed', {
+        error: resolveErrorMessage(session, error)
+      });
+    }
+  });
 
   // On Discord, make auth prompts, auth URLs, and error messages ephemeral
   // (仅自己可见). Results (images and summaries) remain public.

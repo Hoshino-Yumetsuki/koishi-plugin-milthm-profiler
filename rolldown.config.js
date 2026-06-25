@@ -43,6 +43,7 @@ const milthmConstantsPlugin = {
 
     // constant.js 使用 const 声明，通过 new Function
     // 在独立作用域内执行并提取兼容名称的定数对象。
+    // eslint-disable-next-line typescript/no-implied-eval
     const fn = new Function(
       `${code}\nreturn typeof constantsData !== 'undefined' ? constantsData : constants;`
     );

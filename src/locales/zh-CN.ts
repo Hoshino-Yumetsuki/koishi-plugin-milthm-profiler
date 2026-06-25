@@ -1,4 +1,4 @@
-import type { Dict } from 'koishi'
+import type { Dict } from 'koishi';
 
 export const zhCN: Dict = {
   errors: {
@@ -17,7 +17,7 @@ export const zhCN: Dict = {
     'query-parse-failed': '查询用户数据响应解析失败，请开启 debug 日志查看详情',
     'query-daily-limit': '今日存档下载次数已达上限，请明天再试',
     'query-failed': '查询用户数据失败: {detail}',
-    'unknown': '未知错误: {detail}',
+    unknown: '未知错误: {detail}'
   },
   commands: {
     milthm: {
@@ -26,8 +26,8 @@ export const zhCN: Dict = {
         'no-binding': '未绑定 Milthm 账号，请先使用 milthm.update 命令进行授权绑定',
         'no-cache': '未找到本地缓存数据，请先使用 milthm.update 拉取数据',
         'query-failed': '查分失败: {error}',
-        'result-summary': 'Rating: {rating}\n数据时间：{date}',
-      },
+        'result-summary': 'Rating: {rating}\n数据时间：{date}'
+      }
     },
     'milthm.get': {
       description: '查询已缓存的数据',
@@ -35,8 +35,8 @@ export const zhCN: Dict = {
         'no-binding': '未绑定 Milthm 账号，请先使用 milthm.update 命令进行授权绑定',
         'no-cache': '未找到本地缓存数据，请先使用 milthm.update 拉取数据',
         'query-failed': '查分失败: {error}',
-        'result-summary': 'Rating: {rating}\n数据时间：{date}',
-      },
+        'result-summary': 'Rating: {rating}\n数据时间：{date}'
+      }
     },
     'milthm.update': {
       description: '拉取最新数据（消耗每日下载次数）',
@@ -49,23 +49,23 @@ export const zhCN: Dict = {
         'auth-prompt': '请在浏览器中打开以下链接为 {target} 完成授权绑定（5分钟内有效）：',
         'pull-failed-error': '拉取数据失败: {error}',
         'result-summary': 'Rating: {rating}\n数据时间：{date}',
-        'no-valid-scores': '未找到有效的成绩数据',
-      },
+        'no-valid-scores': '未找到有效的成绩数据'
+      }
     },
     'milthm.cancel': {
       description: '取消当前的授权请求',
       messages: {
         cancelled: '已取消授权请求',
-        none: '当前没有进行中的授权请求',
-      },
+        none: '当前没有进行中的授权请求'
+      }
     },
     'milthm.logout': {
       description: '登出并清除本地绑定数据',
       messages: {
         'no-binding': '当前没有已绑定的账号',
         success: '已成功登出，绑定数据已清除。如需重新使用，请通过 milthm.update 重新授权。',
-        failed: '登出失败: {error}',
-      },
-    },
-  },
-}
+        failed: '登出失败: {error}'
+      }
+    }
+  }
+};

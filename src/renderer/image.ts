@@ -291,6 +291,7 @@ function checkTop20V3Condition(items: ProcessedScore[]): boolean {
 
 function limitText(str: string, len: number): string {
   let l = 0;
+  // eslint-disable-next-line typescript/no-misused-spread
   const chars = [...str];
   for (let i = 0; i < chars.length; i++) {
     const code = chars[i].charCodeAt(0);

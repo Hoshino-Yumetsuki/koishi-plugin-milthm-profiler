@@ -261,7 +261,10 @@ export async function waitForAuthAndBind(
 /**
  * 查询用户数据（通过 renya 代理）并缓存结果
  */
-export async function queryUserData(userId: string, acceptLanguage?: string): Promise<NyaProfilerQueryResponse> {
+export async function queryUserData(
+  userId: string,
+  acceptLanguage?: string
+): Promise<NyaProfilerQueryResponse> {
   if (!nyaProfilerClient || !koishiBaseDir) {
     throw new Error(MilthmErrorCode.API_CLIENT_NOT_INIT);
   }

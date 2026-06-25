@@ -78,7 +78,10 @@ export class NyaProfilerClient {
   /**
    * 轮询授权状态（单次）
    */
-  async pollAuthStatus(uuid: string, acceptLanguage?: string): Promise<{ status: string; username?: string }> {
+  async pollAuthStatus(
+    uuid: string,
+    acceptLanguage?: string
+  ): Promise<{ status: string; username?: string }> {
     const url = `${NYA_PROFILER_BASE_URL}/poll?` + `uuid=${encodeURIComponent(uuid)}`;
 
     this.logger.debug(`轮询授权状态: uuid=${uuid}`);
@@ -161,7 +164,10 @@ export class NyaProfilerClient {
   /**
    * 查询用户数据（B20、rating 等）
    */
-  async queryUserData(username: string, acceptLanguage?: string): Promise<NyaProfilerQueryResponse> {
+  async queryUserData(
+    username: string,
+    acceptLanguage?: string
+  ): Promise<NyaProfilerQueryResponse> {
     const url = `${NYA_PROFILER_BASE_URL}/query?` + `username=${encodeURIComponent(username)}`;
 
     this.logger.debug(`查询用户数据: username=${username}`);
