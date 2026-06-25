@@ -7,6 +7,10 @@
     "typescript/no-explicit-any": "off",
     "typescript/triple-slash-reference": "off"
   },
+  "options": {
+    "typeAware": true,
+    "typeCheck": true
+  },
   "ignorePatterns": [
     "node_modules",
     "out",
