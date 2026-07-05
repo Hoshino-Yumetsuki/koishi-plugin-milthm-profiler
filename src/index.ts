@@ -24,11 +24,15 @@ export let logger: Logger;
 
 export const name = 'milthm-profiler';
 
-/** Build Accept-Language header value from Koishi session locales */
+/** Get Accept-Language from Koishi's i18n system.
+ *
+ * Uses the global i18n fallback chain (default: zh-CN first).
+ * filter-pro overrides via session.locales are picked up automatically
+ * since filter-pro sets session.locales before the command action runs. */
 function getAcceptLanguage(session: any): string | undefined {
-  const locales: string[] | undefined = session?.locales;
-  if (!locales || locales.length === 0) return undefined;
-  return locales.join(', ');
+  const locales: string[] | undefined = session?.app?.i18n?.fallback(session?.locales || []);
+  if (!locales?.length) return undefined;
+  return locales[0];
 }
 
 function sendAuthUrl(session: any, url: string) {
