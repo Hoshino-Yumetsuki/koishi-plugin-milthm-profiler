@@ -98,21 +98,6 @@ export function calculateSingleRating(constant: number, score: number): number {
   return 0;
 }
 
-// 计算单曲 Rating (V2 版本，4.0 之前的旧公式)
-export function calculateSingleRatingV2(constant: number, score: number): number {
-  if (constant < 0.001) return 0;
-  if (score >= 1_005_000) return 1 + constant;
-  if (score >= 995_000) return 1.4 / (Math.exp(363.175 - score * 0.000365) + 1) - 0.4 + constant;
-  if (score >= 980_000)
-    return (
-      ((Math.exp((3.1 * (score - 980_000)) / 15_000) - 1) / (Math.exp(3.1) - 1)) * 0.8 -
-      0.5 +
-      constant
-    );
-  if (score >= 700_000) return score / 280_000 - 4 + constant;
-  return 0;
-}
-
 export function calculateRating(song: SongInfo, result: ScoreResult): RatingResult {
   const score = result.score || calculateScore(result);
   const rank = getRank(score);
@@ -157,48 +142,29 @@ export interface SaveDataScore {
 export function parseSaveData(saveContent: string): SaveDataScore[] {
   try {
     const data = JSON.parse(saveContent);
-    const scores: SaveDataScore[] = [];
 
-    // 解析 V3 记录（新版存档格式）
-    if (data.SongRecordsV3 && Array.isArray(data.SongRecordsV3)) {
-      for (const record of data.SongRecordsV3) {
-        scores.push({
-          chart_id: record.BeatmapID || '',
-          score: record.BestScore || 0,
-          accuracy: record.BestAccuracy || 0,
-          perfect_count: 0, // V3 存档不包含详细判定数据
-          good_count: 0,
-          bad_count: 0,
-          miss_count: 0,
-          played_at: '',
-          // 保存原始字段用于后续判断
-          isV3: true,
-          bestLevel: record.BestLevel,
-          achievedStatus: record.AchievedStatus || []
-        });
-      }
+    const mapRecord = (record: any, isV3: boolean): SaveDataScore => ({
+      chart_id: String(record.BeatmapID || '').trim(),
+      score: record.BestScore || 0,
+      accuracy: record.BestAccuracy || 0,
+      perfect_count: 0,
+      good_count: 0,
+      bad_count: 0,
+      miss_count: 0,
+      played_at: '',
+      isV3,
+      bestLevel: record.BestLevel,
+      achievedStatus: record.AchievedStatus || []
+    });
+
+    // milthm 6.0: prefer SongRecordsV3 only; legacy SongRecords if V3 absent
+    if (Array.isArray(data.SongRecordsV3) && data.SongRecordsV3.length > 0) {
+      return data.SongRecordsV3.map((r: any) => mapRecord(r, true));
     }
-
-    // 解析旧版记录（全部包含，后续通过合并逻辑取最优值）
-    if (data.SongRecords && Array.isArray(data.SongRecords)) {
-      for (const record of data.SongRecords) {
-        scores.push({
-          chart_id: record.BeatmapID || '',
-          score: record.BestScore || 0,
-          accuracy: record.BestAccuracy || 0,
-          perfect_count: 0,
-          good_count: 0,
-          bad_count: 0,
-          miss_count: 0,
-          played_at: '',
-          isV3: false,
-          bestLevel: record.BestLevel,
-          achievedStatus: record.AchievedStatus || []
-        });
-      }
+    if (Array.isArray(data.SongRecords)) {
+      return data.SongRecords.map((r: any) => mapRecord(r, false));
     }
-
-    return scores;
+    return [];
   } catch (error) {
     console.error('解析存档数据失败', error);
     return [];

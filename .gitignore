@@ -38,3 +38,5 @@ __pycache__
 assets/covers
 .omo
 .omc
+# generated song covers (from calculator-web images.css)
+assets/images.css

@@ -14,7 +14,6 @@ import { image, container, text as textNode } from '@takumi-rs/helpers';
 import type { Context } from 'koishi';
 import type { ProcessedScore, B20Result } from '../utils/processor';
 import { loadConstantData } from '../utils/constant-loader';
-import coversData from 'virtual:milthm-covers';
 import Vips from 'wasm-vips';
 import * as fs from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
@@ -40,7 +39,7 @@ let assetsPath = '';
 let vipsInstance: any = null;
 let renderSequence = 0;
 let fontCache: Uint8Array[] | null = null;
-let illustrationMapPromise: Promise<Map<string, string>> | null = null;
+let coverCssMapPromise: Promise<Map<string, Uint8Array>> | null = null;
 
 const pngCache = new Map<string, Uint8Array>();
 
@@ -118,46 +117,114 @@ function registerImage(r: Renderer, key: string, data: Uint8Array) {
   r.putPersistentImage({ src: key, data });
 }
 
-// song name → webp filename, built from assets/covers/cover-map.json
-async function loadCoverMap(): Promise<Map<string, string>> {
-  if (!illustrationMapPromise) {
-    illustrationMapPromise = (async () => {
-      const map = new Map<string, string>();
-      try {
-        const mapPath = path.join(assetsPath, 'assets', 'covers', 'cover-map.json');
-        const raw = await fs.readFile(mapPath, 'utf-8');
-        const obj = JSON.parse(raw) as Record<string, string>;
-        for (const [title, filename] of Object.entries(obj)) {
-          map.set(title, filename);
+/** Port of milthm-calculator-web/js/cha_newui.js songNameToCssClass */
+function songNameToCssClass(name: string): string {
+  if (name === 'Fly To Meteor (Milthm Edit)') {
+    name = 'Fly To Meteor feat.兔柒 (Milthm Edit)';
+  }
+  if (name === 'LiFE Garden') {
+    name = 'LiFE Garden (Extended Mix)';
+  }
+  const cleaned = String(name)
+    .replace(/[ \-]/g, '_')
+    .replace(/[()?]/g, '')
+    .replace(/!/g, '')
+    .replace(/\./g, '')
+    .replace(/#/g, '')
+    .replace(/~/g, '')
+    .replace(/&/g, '')
+    .toLowerCase();
+  return cleaned || 'nya';
+}
+
+/** Resize and center-crop jpeg/png buffer to target size. */
+async function resizeCropPng(
+  imageData: Uint8Array,
+  targetW: number,
+  targetH: number
+): Promise<Uint8Array> {
+  const vips = await initVips();
+  let img: any = null;
+  let resized: any = null;
+  let cropped: any = null;
+  try {
+    img = vips.Image.newFromBuffer(Buffer.from(imageData));
+    const srcW: number = img.width;
+    const srcH: number = img.height;
+    const scale = Math.max(targetW / srcW, targetH / srcH);
+    const scaledW = Math.round(srcW * scale);
+    const scaledH = Math.round(srcH * scale);
+    resized = img.resize(scale);
+    const cropX = Math.max(0, Math.floor((scaledW - targetW) / 2));
+    const cropY = Math.max(0, Math.floor((scaledH - targetH) / 2));
+    cropped = resized.crop(cropX, cropY, targetW, targetH);
+    const pngBuffer = cropped.writeToBuffer('.png', { compression: 6 });
+    return new Uint8Array(pngBuffer);
+  } finally {
+    for (const obj of [cropped, resized, img]) {
+      if (obj) {
+        try {
+          obj[Symbol.dispose]();
+        } catch {}
+      }
+    }
+  }
+}
+
+async function loadCoverCssMap(): Promise<Map<string, Uint8Array>> {
+  if (!coverCssMapPromise) {
+    coverCssMapPromise = (async () => {
+      const map = new Map<string, Uint8Array>();
+      const candidates = [
+        path.join(assetsPath, 'assets', 'images.css'),
+        path.join(assetsPath, 'images.css'),
+        path.join(process.cwd(), 'assets', 'images.css'),
+        path.join(process.cwd(), 'third_party', 'milthm-calculator-web', 'images.css')
+      ];
+      let css: string | null = null;
+      for (const p of candidates) {
+        try {
+          css = await fs.readFile(p, 'utf-8');
+          break;
+        } catch {
+          // try next
         }
-      } catch {
-        // cover map unavailable
+      }
+      if (!css) return map;
+
+      const re =
+        /\.([^\s{.#]+)\s*\{[^}]*?background-image:\s*url\(['"]?(data:image\/(?:jpeg|png);base64,[A-Za-z0-9+/=]+)['"]?\)/gs;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(css))) {
+        const cls = m[1];
+        const dataUrl = m[2];
+        const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+        map.set(cls, Uint8Array.from(Buffer.from(b64, 'base64')));
       }
       return map;
     })();
   }
-  return illustrationMapPromise;
+  return coverCssMapPromise;
 }
 
-async function loadCoverForChart(chartId: string, songName: string): Promise<Uint8Array | null> {
-  const cacheKey = `cover:${chartId}`;
+async function loadCoverForSong(
+  songName: string,
+  targetW: number,
+  targetH: number
+): Promise<Uint8Array | null> {
+  const cls = songNameToCssClass(songName);
+  const cacheKey = `cover:${cls}:${targetW}x${targetH}`;
   const cached = pngCache.get(cacheKey);
   if (cached) return cached;
 
-  // First try chart_id lookup (virtual:milthm-covers, built from out.json)
-  let filename: string | undefined = coversData[chartId];
-  // Fallback to song name lookup (cover-map.json)
-  if (!filename) {
-    const coverMap = await loadCoverMap();
-    filename = coverMap.get(songName);
-  }
-  if (!filename) return null;
+  const map = await loadCoverCssMap();
+  const raw = map.get(cls);
+  if (!raw) return null;
 
-  const coverPath = path.join(assetsPath, 'assets', 'covers', filename);
   try {
-    const data = new Uint8Array(await fs.readFile(coverPath));
-    if (pngCache.size < 200) pngCache.set(cacheKey, data);
-    return data;
+    const resized = await resizeCropPng(raw, targetW, targetH);
+    if (pngCache.size < 200) pngCache.set(cacheKey, resized);
+    return resized;
   } catch {
     return null;
   }
@@ -404,7 +471,7 @@ export async function generateB20Image(
   const [coverResults, extrasCoverResults, iconResults] = await Promise.all([
     Promise.all(
       items.map((item, i) =>
-        loadCoverForChart(item.chart_id, item.name).then((png) => ({
+        loadCoverForSong(item.name, 204, 115).then((png) => ({
           i,
           key: `${renderKeyPrefix}_cover_${i}`,
           png
@@ -413,7 +480,7 @@ export async function generateB20Image(
     ),
     Promise.all(
       extras.map((item, i) =>
-        loadCoverForChart(item.chart_id, item.name).then((png) => ({
+        loadCoverForSong(item.name, 204, 115).then((png) => ({
           i,
           key: `${renderKeyPrefix}_ex_cover_${i}`,
           png

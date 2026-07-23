@@ -1,11 +1,5 @@
 import type { Context } from 'koishi';
-import {
-  parseSaveData,
-  calculateSingleRating,
-  calculateSingleRatingV2,
-  calculateAverageRating,
-  getRank
-} from './calculator';
+import { parseSaveData, calculateSingleRating, calculateAverageRating, getRank } from './calculator';
 import { loadConstantData, difficultyToName } from './constant-loader';
 
 export interface ChartInfo {
@@ -80,30 +74,9 @@ export function processSaveData(_ctx: Context, saveContent: string): B20Result {
       continue;
     }
 
-    // 判断是否使用 V3 Rating（参考 milthm-calculator-web 逻辑）
-    const useV3 =
-      score.isV3 || // 来自 SongRecordsV3
-      (score.bestLevel !== undefined && score.bestLevel <= 1) || // 满分等级
-      score.score >= 1005000 || // AP 分数
-      (score.achievedStatus &&
-        (score.achievedStatus.includes(2) || score.achievedStatus.includes(5))); // 特殊成就
-
-    // 三路分支计算 singleRating（与 milthm-calculator-web 一致）
-    // 1. isV3 → 用 V3 公式（realityv3）+ V3 定数
-    // 2. useV3 但非 isV3 → 直接给 constantv3 + 1.5（V3 满分值）
-    // 3. 其他 → 用 V2 公式（reality）+ V2 定数
-    let singleRating: number;
-    let constant: number;
-    if (score.isV3) {
-      constant = chartInfo.constantv3;
-      singleRating = calculateSingleRating(constant, score.score);
-    } else if (useV3) {
-      constant = chartInfo.constantv3;
-      singleRating = constant > 1e-5 ? constant + 1.5 : 0;
-    } else {
-      constant = chartInfo.constant;
-      singleRating = calculateSingleRatingV2(constant, score.score);
-    }
+    // milthm 6.0 / calculator-web: always V3 formula on constantv3
+    const constant = chartInfo.constantv3;
+    const singleRating = calculateSingleRating(constant, score.score);
     const rank = getRank(score.score);
 
     // FC/AP 判断

@@ -15,10 +15,7 @@ const config = {
 const VIRTUAL_CONSTANTS_ID = 'virtual:milthm-constants';
 const RESOLVED_CONSTANTS_ID = `\0${VIRTUAL_CONSTANTS_ID}`;
 const UPSTREAM_CONSTANT_JS = resolve('./third_party/milthm-calculator-web/js/constant.js');
-
-const VIRTUAL_COVERS_ID = 'virtual:milthm-covers';
-const RESOLVED_COVERS_ID = `\0${VIRTUAL_COVERS_ID}`;
-const UPSTREAM_OUT_JSON = resolve('./third_party/MilResource/resource/out.json');
+const UPSTREAM_IMAGES_CSS = resolve('./third_party/milthm-calculator-web/images.css');
 
 /**
  * 在构建期间执行上游 constant.js，将 constantsData 序列化为 JSON
@@ -49,51 +46,9 @@ const milthmConstantsPlugin = {
     );
     const data = fn();
 
-    console.log(`\u2713 milthm-constants: 已捆绑 ${Object.keys(data).length} 条定数条目`);
+    console.log(`✓ milthm-constants: 已捆绑 ${Object.keys(data).length} 条定数条目`);
 
     return `export default ${JSON.stringify(data)}`;
-  }
-};
-
-/**
- * 在构建期间解析 out.json，将 BeatmapId → WebP文件名 映射序列化为 JSON
- * 并作为虚拟 ESM 模块捆绑进产物，运行时直接用 chart_id 查找封面。
- */
-const milthmCoversPlugin = {
-  name: 'milthm-covers',
-  resolveId(id) {
-    if (id === VIRTUAL_COVERS_ID) return RESOLVED_COVERS_ID;
-  },
-  load(id) {
-    if (id !== RESOLVED_COVERS_ID) return;
-
-    if (!existsSync(UPSTREAM_OUT_JSON)) {
-      console.warn(`[milthm-covers] 找不到 out.json: ${UPSTREAM_OUT_JSON}，封面映射将为空`);
-      return `export default {}`;
-    }
-
-    const chapters = JSON.parse(readFileSync(UPSTREAM_OUT_JSON, 'utf-8'));
-    const coverMap = {};
-
-    for (const chapter of chapters) {
-      for (const song of chapter.Songs ?? []) {
-        const uri = song.SharingMetaData?.IllustrationUri ?? '';
-        if (!uri) continue;
-
-        const rawFilename = uri.split('/').pop() ?? '';
-        const decoded = decodeURIComponent(rawFilename);
-        const webpFilename = decoded.replace(/\.milimg$/i, '.webp');
-
-        for (const level of song.Levels ?? []) {
-          const beatmapId = (level.BeatmapId ?? '').trim();
-          if (beatmapId) coverMap[beatmapId] = webpFilename;
-        }
-      }
-    }
-
-    console.log(`\u2713 milthm-covers: 已捆绑 ${Object.keys(coverMap).length} 条封面映射`);
-
-    return `export default ${JSON.stringify(coverMap)}`;
   }
 };
 
@@ -105,7 +60,6 @@ const copyAssetsPlugin = {
 
     if (!existsSync(assetsSourceDir)) {
       console.log('⚠️  assets 目录不存在，跳过复制');
-      console.log('   请先运行: yarn convert');
     } else {
       try {
         copyDir(assetsSourceDir, assetsTargetDir);
@@ -113,6 +67,22 @@ const copyAssetsPlugin = {
       } catch (err) {
         console.error('✗ 复制 assets 失败:', err);
       }
+    }
+
+    // always ship images.css for song covers (from calculator-web)
+    try {
+      mkdirSync(assetsTargetDir, { recursive: true });
+      if (existsSync(UPSTREAM_IMAGES_CSS)) {
+        copyFileSync(UPSTREAM_IMAGES_CSS, join(assetsTargetDir, 'images.css'));
+        console.log('✓ images.css 已复制到 lib/assets/');
+      } else if (existsSync('./assets/images.css')) {
+        copyFileSync('./assets/images.css', join(assetsTargetDir, 'images.css'));
+        console.log('✓ images.css 已从 assets/ 复制到 lib/assets/');
+      } else {
+        console.warn('⚠️  找不到 images.css，曲绘将不可用');
+      }
+    } catch (err) {
+      console.error('✗ 复制 images.css 失败:', err);
     }
 
     function copyDir(src, dest) {
@@ -139,18 +109,18 @@ export default defineConfig([
     ...config,
     output: [{ file: 'lib/index.mjs', format: 'es', minify: true }],
     external: external,
-    plugins: [milthmConstantsPlugin, milthmCoversPlugin, copyAssetsPlugin]
+    plugins: [milthmConstantsPlugin, copyAssetsPlugin]
   },
   {
     ...config,
     output: [{ file: 'lib/index.cjs', format: 'cjs', minify: true }],
     external: external,
-    plugins: [milthmConstantsPlugin, milthmCoversPlugin]
+    plugins: [milthmConstantsPlugin]
   },
   {
     ...config,
     output: [{ dir: 'lib', format: 'es' }],
-    plugins: [milthmConstantsPlugin, milthmCoversPlugin, dts({ emitDtsOnly: true })],
+    plugins: [milthmConstantsPlugin, dts({ emitDtsOnly: true })],
     external: external
   }
 ]);
