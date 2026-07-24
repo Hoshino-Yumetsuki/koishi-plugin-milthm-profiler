@@ -26,13 +26,15 @@ export const name = 'milthm-profiler';
 
 /** Get Accept-Language from Koishi's i18n system.
  *
- * Uses the global i18n fallback chain (default: zh-CN first).
- * filter-pro overrides via session.locales are picked up automatically
- * since filter-pro sets session.locales before the command action runs. */
+ * OneBot does not provide channel language, so session.locales is often empty.
+ * We resolve via i18n.fallback (global locales order, default zh-CN first).
+ * filter-pro overrides via session.locales are still picked up when present.
+ *
+ * Note: fallback() always prefixes an empty "" root entry — must skip it,
+ * otherwise Accept-Language: "" is treated as non-Chinese by renya → .com. */
 function getAcceptLanguage(session: any): string | undefined {
   const locales: string[] | undefined = session?.app?.i18n?.fallback(session?.locales || []);
-  if (!locales?.length) return undefined;
-  return locales[0];
+  return locales?.find((locale) => locale.length > 0);
 }
 
 function sendAuthUrl(session: any, url: string) {
