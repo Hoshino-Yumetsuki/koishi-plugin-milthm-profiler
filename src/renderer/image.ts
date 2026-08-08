@@ -1072,7 +1072,8 @@ function buildHeader(
   }
 
   // TOP20 AVG + Date (基于 rightX，不受头像影响)
-  const rightInfoY = realityY + (starCount > 0 ? 60 : 35);
+  // 始终保留星标区域，避免上游未返回星星数据时下方文字上移。
+  const rightInfoY = realityY + 60;
   const avgText = `TOP20 AVG ${result.averageRating.toFixed(5)}`;
   const avgLeft = rightX - estimateTextW(avgText, 15);
   children.push(
