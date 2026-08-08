@@ -57,6 +57,8 @@ const PLUGIN_NAME = 'milthm-profiler';
 interface UserBinding {
   userId: string;
   milthmUsername: string;
+  /** 显示在查分图片上的游戏昵称；旧绑定可能没有此字段 */
+  milthmNickname?: string;
   boundAt: number;
 }
 
@@ -66,6 +68,8 @@ interface UserBinding {
 export interface CachedQueryResult {
   userId: string;
   milthmUsername: string;
+  /** 显示在查分图片上的游戏昵称；旧缓存可能没有此字段 */
+  milthmNickname?: string;
   best20: ProcessedScore[];
   extras: ProcessedScore[];
   averageRating: number;
@@ -196,7 +200,7 @@ export async function registerAndWaitForAuth(
   uuid: string,
   config: Config,
   acceptLanguage?: string
-): Promise<{ username: string }> {
+): Promise<{ username: string; nickname: string }> {
   if (!sessionManager) {
     throw new Error(MilthmErrorCode.SESSION_MANAGER_NOT_INIT);
   }
@@ -214,7 +218,7 @@ export async function waitForAuthAndBind(
   userId: string,
   config: Config,
   acceptLanguage?: string
-): Promise<{ username: string }> {
+): Promise<{ username: string; nickname: string }> {
   if (!nyaProfilerClient || !sessionManager || !koishiBaseDir) {
     throw new Error(MilthmErrorCode.API_CLIENT_NOT_INIT);
   }
@@ -227,24 +231,28 @@ export async function waitForAuthAndBind(
   logger.info(`开始等待用户 ${userId} 完成授权`);
 
   try {
-    const { username } = await nyaProfilerClient.waitForAuth(
+    const { username, nickname } = await nyaProfilerClient.waitForAuth(
       session.uuid,
       config.pollTimeout,
       config.pollInterval,
       acceptLanguage
     );
 
-    logger.info(`用户 ${userId} 已完成授权`, { milthmUsername: username });
+    logger.info(`用户 ${userId} 已完成授权`, {
+      milthmUsername: username,
+      milthmNickname: nickname
+    });
 
     saveBinding(koishiBaseDir, {
       userId,
       milthmUsername: username,
+      milthmNickname: nickname,
       boundAt: Date.now()
     });
 
     sessionManager.removeSession(userId);
 
-    return { username };
+    return { username, nickname };
   } catch (error) {
     logger.error(`用户 ${userId} 授权流程失败`, { error });
 
@@ -280,6 +288,7 @@ export async function queryUserData(
     saveCachedResult(koishiBaseDir, {
       userId,
       milthmUsername: binding.milthmUsername,
+      milthmNickname: response.details.nickname || binding.milthmNickname || binding.milthmUsername,
       best20: response.details.best20,
       extras: response.details.extras,
       averageRating: response.details.averageRating,

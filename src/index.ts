@@ -112,7 +112,7 @@ export function apply(ctx: Context, config: Config) {
 
       const b20UserInfo = {
         username: cached.milthmUsername,
-        nickname: cached.milthmUsername,
+        nickname: cached.milthmNickname || cached.milthmUsername,
         userId: ''
       };
 
@@ -165,7 +165,7 @@ export function apply(ctx: Context, config: Config) {
 
           if (response.details?.needAuth) {
             let authUrl: string;
-            let waitFn: () => Promise<{ username: string }>;
+            let waitFn: () => Promise<{ username: string; nickname: string }>;
 
             if (response.details.url && response.details.uuid) {
               authUrl = response.details.url;
@@ -182,15 +182,15 @@ export function apply(ctx: Context, config: Config) {
             session.milthmEphemeral = true;
             await sendAuthUrl(session, authUrl);
 
-            const { username } = await waitFn();
-            logger.info('重新授权成功', { userId, username });
+            const { username, nickname } = await waitFn();
+            logger.info('重新授权成功', { userId, username, nickname });
 
             const retryResponse = await queryUserData(userId, acceptLanguage);
             if (retryResponse.result !== '200') {
               session.milthmEphemeral = true;
               return session.text('.query-failed', { message: retryResponse.message });
             }
-            return await renderAndSend(session, retryResponse, username);
+            return await renderAndSend(session, retryResponse, username, nickname);
           }
 
           if (response.result !== '200') {
@@ -198,7 +198,12 @@ export function apply(ctx: Context, config: Config) {
             return session.text('.pull-failed', { message: response.message });
           }
 
-          return await renderAndSend(session, response, binding.milthmUsername);
+          return await renderAndSend(
+            session,
+            response,
+            binding.milthmUsername,
+            binding.milthmNickname || binding.milthmUsername
+          );
         }
 
         const { url } = await generateAuthUrlForUser(userId, acceptLanguage);
@@ -208,7 +213,7 @@ export function apply(ctx: Context, config: Config) {
         session.milthmEphemeral = true;
         await sendAuthUrl(session, url);
 
-        const { username } = await waitForAuthAndBind(userId, config, acceptLanguage);
+        const { username, nickname } = await waitForAuthAndBind(userId, config, acceptLanguage);
 
         const response = await queryUserData(userId, acceptLanguage);
         if (response.result !== '200') {
@@ -219,7 +224,7 @@ export function apply(ctx: Context, config: Config) {
           });
         }
 
-        return await renderAndSend(session, response, username);
+        return await renderAndSend(session, response, username, nickname);
       } catch (error) {
         logger.error('拉取数据失败', { error, userId });
         session.milthmEphemeral = true;
@@ -304,7 +309,8 @@ function setupDiscordEphemeral(ctx: Context) {
 async function renderAndSend(
   session: any,
   response: NyaProfilerQueryResponse,
-  username: string
+  username: string,
+  nickname: string
 ): Promise<string> {
   const { best20, averageRating } = response.details;
 
@@ -317,7 +323,7 @@ async function renderAndSend(
 
   const b20UserInfo = {
     username,
-    nickname: username,
+    nickname: response.details.nickname || nickname,
     userId: ''
   };
 

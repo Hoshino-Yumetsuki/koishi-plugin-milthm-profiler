@@ -1,5 +1,10 @@
 import type { Context } from 'koishi';
-import { parseSaveData, calculateSingleRating, calculateAverageRating, getRank } from './calculator';
+import {
+  parseSaveData,
+  calculateSingleRating,
+  calculateAverageRating,
+  getRank
+} from './calculator';
 import { loadConstantData, difficultyToName } from './constant-loader';
 
 export interface ChartInfo {

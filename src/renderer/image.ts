@@ -126,7 +126,7 @@ function songNameToCssClass(name: string): string {
     name = 'LiFE Garden (Extended Mix)';
   }
   const cleaned = String(name)
-    .replace(/[ \-]/g, '_')
+    .replace(/[ -]/g, '_')
     .replace(/[()?]/g, '')
     .replace(/!/g, '')
     .replace(/\./g, '')
@@ -732,7 +732,7 @@ function buildHeader(
   avatarSize: number,
   v3BadgeImageKey: string | null
 ) {
-  const username = userInfo?.username || userInfo?.nickname || 'UNKNOWN';
+  const username = userInfo?.nickname || userInfo?.username || 'UNKNOWN';
   const starCount = result.starCount ?? calculateStars(result.allScores || items);
   const isRealityV3 = checkTop20V3Condition(items);
 

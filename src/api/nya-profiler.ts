@@ -81,7 +81,7 @@ export class NyaProfilerClient {
   async pollAuthStatus(
     uuid: string,
     acceptLanguage?: string
-  ): Promise<{ status: string; username?: string }> {
+  ): Promise<{ status: string; username?: string; nickname?: string }> {
     const url = `${NYA_PROFILER_BASE_URL}/poll?` + `uuid=${encodeURIComponent(uuid)}`;
 
     this.logger.debug(`轮询授权状态: uuid=${uuid}`);
@@ -111,7 +111,8 @@ export class NyaProfilerClient {
 
       return {
         status: data.details.status,
-        username: data.details.username
+        username: data.details.username,
+        nickname: data.details.nickname
       };
     } catch (error) {
       this.logger.error('轮询授权状态时发生错误', { error });
@@ -127,7 +128,7 @@ export class NyaProfilerClient {
     timeout: number = 300,
     interval: number = 5,
     acceptLanguage?: string
-  ): Promise<{ username: string }> {
+  ): Promise<{ username: string; nickname: string }> {
     const startTime = Date.now();
     const timeoutMs = timeout * 1000;
     const intervalMs = interval * 1000;
@@ -139,8 +140,9 @@ export class NyaProfilerClient {
         const result = await this.pollAuthStatus(uuid, acceptLanguage);
 
         if (result.status === 'authorized' && result.username) {
-          this.logger.info('用户已完成授权', { username: result.username });
-          return { username: result.username };
+          const nickname = result.nickname || result.username;
+          this.logger.info('用户已完成授权', { username: result.username, nickname });
+          return { username: result.username, nickname };
         }
 
         if (result.status === 'rejected') {

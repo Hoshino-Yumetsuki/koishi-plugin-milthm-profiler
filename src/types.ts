@@ -13,6 +13,7 @@ export interface NyaProfilerPollResponse {
   details: {
     status: 'pending' | 'pending_consent' | 'authorized' | 'rejected';
     username?: string;
+    nickname?: string;
   };
 }
 
@@ -35,6 +36,7 @@ export interface NyaProfilerQueryResponse {
   message: string;
   details: {
     username: string;
+    nickname?: string;
     best20: ProcessedScore[];
     extras: ProcessedScore[];
     averageRating: number;
